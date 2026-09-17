@@ -1,0 +1,641 @@
+
+
+
+// import { NextResponse } from 'next/server';
+// import { getSheetsClient } from '@/lib/googleSheets';
+// import { uploadImageToDrive } from '@/lib/googleDrive';
+// import { getAuthUser } from '@/lib/auth';
+
+// // Date format: DD/MM/YYYY
+// function getFormattedDate() {
+//   const d = new Date();
+//   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+// }
+
+// // Convert YYYY-MM-DD (from HTML date input) → DD/MM/YYYY
+// function formatInputDate(str) {
+//   if (!str) return '';
+//   const parts = str.split('-');
+//   if (parts.length !== 3) return str;
+//   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+// }
+
+
+
+
+
+// export async function GET(req) {
+//   try {
+//     const user = await getAuthUser();
+//     if (!user) {
+//       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+//     }
+
+//     const { searchParams } = new URL(req.url);
+//     const siteId = searchParams.get('siteId');
+//     const action = searchParams.get('action');
+
+//     if (!siteId) {
+//       return NextResponse.json({ success: false, message: 'Site ID required' }, { status: 400 });
+//     }
+
+//     const sheets = await getSheetsClient();
+
+//     // --- ACTION: getKitting → Full kitting Master se checklist items ---
+//     if (action === 'getKitting') {
+//       const activity = (searchParams.get('activity') || '').trim();
+//       const subActivity = (searchParams.get('subActivity') || '').trim();
+
+//       const response = await sheets.spreadsheets.values.get({
+//         spreadsheetId: siteId,
+//         range: 'Full kitting Master!A1:I',
+//       });
+
+//       const allData = response.data.values || [];
+//       if (allData.length < 2) return NextResponse.json({ success: true, items: [] });
+
+//       const items = allData
+//         .slice(1)
+//         .map((row, i) => ({
+//           rowIndex: i + 2,
+//           activity: (row[0] || '').trim(),
+//           subActivity: (row[1] || '').trim(),
+//           checklist: (row[2] || '').trim(),
+//           verificationType: (row[3] || '').trim(),
+//           responsibleRole: (row[4] || '').trim(),
+//         }))
+//         .filter(
+//           (it) =>
+//             it.activity.toLowerCase() === activity.toLowerCase() &&
+//             it.subActivity.toLowerCase() === subActivity.toLowerCase() &&
+//             it.checklist
+//         );
+
+//       return NextResponse.json({ success: true, items });
+//     }
+
+//     // --- DEFAULT: Project Plan table (A-Z data read) ---
+//     const response = await sheets.spreadsheets.values.get({
+//       spreadsheetId: siteId,
+//       range: 'Project Plan!A1:Z',
+//     });
+
+//     const allData = response.data.values || [];
+//     if (allData.length < 2) {
+//       return NextResponse.json({ success: true, headers: [], rows: [] });
+//     }
+
+//     const fullHeaders = allData[0];
+//     const displayHeaders = fullHeaders.slice(0, 10); // Sirf A se J headers show karne ke liye
+
+//     // Empty rows hatao (Valid rows)
+//     const validRows = allData
+//       .slice(1)
+//       .map((row, i) => ({ row, rowIndex: i + 2 }))
+//       .filter((r) => r.row[0] && r.row[0].trim() !== '');
+
+//     // Completion map (Column N = index 13)
+//     const completionStatus = {};
+//     validRows.forEach(({ row }) => {
+//       const uid = (row[0] || '').trim();
+//       const colN = (row[13] || '').trim();
+//       completionStatus[uid] = colN !== '';
+//     });
+
+//     // Filter Logic:
+//     // 1. Column K (index 10) me Date honi chahiye.
+//     // 2. Column N (index 13) me Date NAHI honi chahiye.
+//     // 3. Precedence Condition pass honi chahiye.
+//     const readyRows = validRows.filter(({ row }) => {
+//       const uid = (row[0] || '').trim();
+//       const colK = (row[10] || '').trim(); // Column K
+//       const colN = (row[13] || '').trim(); // Column N
+
+//       // Condition 1: Agar N column me date hai, toh fetch nahi karna
+//       if (colN !== '') return false;
+
+//       // Condition 2: Agar K column me date nahi hai, toh fetch nahi karna
+//       if (colK === '') return false;
+
+//       // Condition 3: Precedence Filter
+//       const precedence = (row[5] || '').trim(); // Column F
+//       if (precedence) {
+//         const precArr = precedence.split(',').map((x) => x.trim()).filter(Boolean);
+//         for (const p of precArr) {
+//           if (completionStatus[p] === false) return false;
+//         }
+//       }
+
+//       return true;
+//     });
+
+//     const formattedRows = readyRows.map(({ row, rowIndex }) => {
+//       const isKitted = !!(row[14] && row[14].trim().toLowerCase() === 'done'); // Column O
+//       const isStarted = !!((row[12] && row[12].trim() !== '') || (row[19] && row[19].trim() === 'Started')); // Column M/T
+//       const isCompleted = !!((row[13] && row[13].trim() !== '') || (row[20] && row[20].trim() === 'Completed')); // Column N/U
+
+//       const obj = {
+//         _rowIndex: rowIndex,
+//         _isKitted: isKitted,
+//         _isStarted: isStarted,
+//         _isCompleted: isCompleted,
+//         _startDate: row[12] || '',
+//         _completedDate: row[13] || '',
+//         _fullRow: row,
+//       };
+//       displayHeaders.forEach((h, i) => (obj[h] = row[i] || ''));
+//       return obj;
+//     });
+
+//     return NextResponse.json({ success: true, headers: displayHeaders, rows: formattedRows });
+//   } catch (error) {
+//     console.error('GET Error:', error);
+//     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+//   }
+// }
+
+
+// // ==========================================
+// // POST → Handle Fullkitting / Start / Completed / Edit
+// // ==========================================
+// export async function POST(req) {
+//   try {
+//     const user = await getAuthUser();
+//     if (!user) {
+//       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+//     }
+
+//     const body = await req.json();
+//     const { siteId, projectPlanRowIndex, action, items, editData } = body;
+
+//     if (!siteId || !projectPlanRowIndex) {
+//       return NextResponse.json({ success: false, message: 'Invalid payload' }, { status: 400 });
+//     }
+
+//     const sheets = await getSheetsClient();
+//     const date = getFormattedDate();
+
+//     // ----------------------------------------------------
+//     // ACTION: START → Column M = Date, Column T = "Started"
+//     // ----------------------------------------------------
+//     if (action === 'start') {
+//       await sheets.spreadsheets.values.batchUpdate({
+//         spreadsheetId: siteId,
+//         requestBody: {
+//           valueInputOption: 'USER_ENTERED',
+//           data: [
+//             { range: `Project Plan!M${projectPlanRowIndex}`, values: [[date]] },
+//             { range: `Project Plan!T${projectPlanRowIndex}`, values: [['Started']] },
+//           ],
+//         },
+//       });
+//       return NextResponse.json({ success: true, message: 'Task Started successfully', date });
+//     }
+
+//     // --------------------------------------------------------
+//     // ACTION: COMPLETE → Column N = Date, Column U = "Completed"
+//     // --------------------------------------------------------
+//     if (action === 'complete') {
+//       await sheets.spreadsheets.values.batchUpdate({
+//         spreadsheetId: siteId,
+//         requestBody: {
+//           valueInputOption: 'USER_ENTERED',
+//           data: [
+//             { range: `Project Plan!N${projectPlanRowIndex}`, values: [[date]] },
+//             { range: `Project Plan!U${projectPlanRowIndex}`, values: [['Completed']] },
+//           ],
+//         },
+//       });
+//       return NextResponse.json({ success: true, message: 'Task Completed successfully', date });
+//     }
+
+//     // ==========================================================================
+//     // ACTION: EDIT → Update K & L in Project Plan + Append to Exception Change Log
+//     // ==========================================================================
+//     if (action === 'edit') {
+//       if (!editData || !editData.plannedStart || !editData.plannedEnd) {
+//         return NextResponse.json({ success: false, message: 'Planned dates are required' }, { status: 400 });
+//       }
+
+//       // 1. Fetch existing row from Project Plan (columns A → J) to build Exception Log entry
+//       const rowResponse = await sheets.spreadsheets.values.get({
+//         spreadsheetId: siteId,
+//         range: `Project Plan!A${projectPlanRowIndex}:J${projectPlanRowIndex}`,
+//       });
+
+//       const rowData = (rowResponse.data.values && rowResponse.data.values[0]) || [];
+//       // Padding to make sure indices 0-9 exist
+//       while (rowData.length < 10) rowData.push('');
+
+//       const plannedStart = formatInputDate(editData.plannedStart);
+//       const plannedEnd = formatInputDate(editData.plannedEnd);
+//       const remarks = editData.remarks || '';
+
+//       // 2. Build Exception Change Log row (13 columns A → M)
+//       // A UID | B Project ID | C Zone | D Activity | E Sub Activity | F Precedence UID
+//       // G Chain Type | H Baseline Duration | I Baseline Start | J Baseline Finish
+//       // K Planned Start Date | L Planned End Date | M Remarks
+//       const logRow = [
+//         rowData[0] || '', // UID
+//         rowData[1] || '', // Project ID
+//         rowData[2] || '', // Zone
+//         rowData[3] || '', // Activity
+//         rowData[4] || '', // Sub Activity
+//         rowData[5] || '', // Precedence UID
+//         rowData[6] || '', // Chain Type
+//         rowData[7] || '', // Baseline Duration
+//         rowData[8] || '', // Baseline Start
+//         rowData[9] || '', // Baseline Finish
+//         plannedStart,     // Planned Start Date (new)
+//         plannedEnd,       // Planned End Date (new)
+//         remarks,          // Remarks
+//       ];
+
+//       // 3. Append to Exception Change Log
+//       await sheets.spreadsheets.values.append({
+//         spreadsheetId: siteId,
+//         range: 'Exception Change Log!A:M',
+//         valueInputOption: 'USER_ENTERED',
+//         insertDataOption: 'INSERT_ROWS',
+//         requestBody: { values: [logRow] },
+//       });
+
+//       // 4. Update Project Plan K & L
+//       await sheets.spreadsheets.values.batchUpdate({
+//         spreadsheetId: siteId,
+//         requestBody: {
+//           valueInputOption: 'USER_ENTERED',
+//           data: [
+//             { range: `Project Plan!K${projectPlanRowIndex}`, values: [[plannedStart]] },
+//             { range: `Project Plan!L${projectPlanRowIndex}`, values: [[plannedEnd]] },
+//           ],
+//         },
+//       });
+
+//       return NextResponse.json({ success: true, message: 'Exception logged & plan updated' });
+//     }
+
+//     // ----------------------------------------------------
+//     // DEFAULT ACTION: FULLKITTING (Images upload + updates)
+//     // ----------------------------------------------------
+//     if (!Array.isArray(items) || items.length === 0) {
+//       return NextResponse.json({ success: false, message: 'No items provided for kitting' }, { status: 400 });
+//     }
+
+//     // 1. Sabhi images parallel upload
+//     const uploaded = await Promise.all(
+//       items.map(async (it) => {
+//         if (!it.image?.base64) {
+//           throw new Error(`Photo missing for checklist row ${it.rowIndex}`);
+//         }
+//         const url = await uploadImageToDrive({
+//           base64: it.image.base64,
+//           mimeType: it.image.mimeType || 'image/jpeg',
+//           name: it.image.name || `evidence_${Date.now()}.jpg`,
+//         });
+//         return { ...it, url };
+//       })
+//     );
+
+//     // 2. Full kitting Master updates: F=Date, G=Link, H=Status, I=Remarks
+//     const data = uploaded.map((it) => ({
+//       range: `Full kitting Master!F${it.rowIndex}:I${it.rowIndex}`,
+//       values: [[date, it.url, 'Done', it.remarks || '']],
+//     }));
+
+//     // 3. Project Plan me Column O ("Done" Status)
+//     data.push({
+//       range: `Project Plan!O${projectPlanRowIndex}`,
+//       values: [['Done']],
+//     });
+
+//     await sheets.spreadsheets.values.batchUpdate({
+//       spreadsheetId: siteId,
+//       requestBody: { valueInputOption: 'USER_ENTERED', data },
+//     });
+
+//     return NextResponse.json({ success: true, message: 'Fullkitting submitted successfully', date });
+//   } catch (error) {
+//     console.error('POST Error:', error);
+//     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+//   }
+// }
+
+
+
+
+
+
+import { NextResponse } from 'next/server';
+import { getSheetsClient } from '@/lib/googleSheets';
+import { uploadImageToDrive } from '@/lib/googleDrive';
+import { getAuthUser } from '@/lib/auth';
+
+// Date format: DD/MM/YYYY
+function getFormattedDate() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+// Convert YYYY-MM-DD (from HTML date input) → DD/MM/YYYY
+function formatInputDate(str) {
+  if (!str) return '';
+  const parts = str.split('-');
+  if (parts.length !== 3) return str;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+export async function GET(req) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const siteId = searchParams.get('siteId');
+    const action = searchParams.get('action');
+
+    if (!siteId) {
+      return NextResponse.json({ success: false, message: 'Site ID required' }, { status: 400 });
+    }
+
+    const sheets = await getSheetsClient();
+
+    // --- ACTION: getKitting → Full kitting Master se checklist items ---
+    if (action === 'getKitting') {
+      const activity = (searchParams.get('activity') || '').trim();
+      const subActivity = (searchParams.get('subActivity') || '').trim();
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: siteId,
+        range: 'Full kitting Master!A1:I',
+      });
+
+      const allData = response.data.values || [];
+      if (allData.length < 2) return NextResponse.json({ success: true, items: [] });
+
+      const items = allData
+        .slice(1)
+        .map((row, i) => ({
+          rowIndex: i + 2,
+          activity: (row[0] || '').trim(),
+          subActivity: (row[1] || '').trim(),
+          checklist: (row[2] || '').trim(),
+          verificationType: (row[3] || '').trim(),
+          responsibleRole: (row[4] || '').trim(),
+        }))
+        .filter(
+          (it) =>
+            it.activity.toLowerCase() === activity.toLowerCase() &&
+            it.subActivity.toLowerCase() === subActivity.toLowerCase() &&
+            it.checklist
+        );
+
+      return NextResponse.json({ success: true, items });
+    }
+
+    // --- DEFAULT: Project Plan table (A-Z data read) ---
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: siteId,
+      range: 'Project Plan!A1:Z',
+    });
+
+    const allData = response.data.values || [];
+    if (allData.length < 2) {
+      return NextResponse.json({ success: true, headers: [], rows: [] });
+    }
+
+    const fullHeaders = allData[0];
+    
+    // 🔥 NEW: A se L (0 to 11) pick karna hai (K = Planned Start, L = Planned End)
+    const displayHeaders = fullHeaders.slice(0, 12);
+    // 🔥 NEW: Column P (Index 15) pick karna hai (Resource Allocation)
+    if (fullHeaders[15]) {
+      displayHeaders.push(fullHeaders[15]); 
+    }
+
+    // Empty rows hatao (Valid rows)
+    const validRows = allData
+      .slice(1)
+      .map((row, i) => ({ row, rowIndex: i + 2 }))
+      .filter((r) => r.row[0] && r.row[0].trim() !== '');
+
+    // Completion map (Column N = index 13)
+    const completionStatus = {};
+    validRows.forEach(({ row }) => {
+      const uid = (row[0] || '').trim();
+      const colN = (row[13] || '').trim();
+      completionStatus[uid] = colN !== '';
+    });
+
+    // Filter Logic
+    const readyRows = validRows.filter(({ row }) => {
+      const colK = (row[10] || '').trim(); // Column K
+      const colN = (row[13] || '').trim(); // Column N
+
+      if (colN !== '') return false;
+      if (colK === '') return false;
+
+      const precedence = (row[5] || '').trim(); // Column F
+      if (precedence) {
+        const precArr = precedence.split(',').map((x) => x.trim()).filter(Boolean);
+        for (const p of precArr) {
+          if (completionStatus[p] === false) return false;
+        }
+      }
+      return true;
+    });
+
+    const formattedRows = readyRows.map(({ row, rowIndex }) => {
+      const isKitted = !!(row[14] && row[14].trim().toLowerCase() === 'done'); // Column O
+      const isStarted = !!((row[12] && row[12].trim() !== '') || (row[19] && row[19].trim() === 'Started')); // Column M/T
+      const isCompleted = !!((row[13] && row[13].trim() !== '') || (row[20] && row[20].trim() === 'Completed')); // Column N/U
+
+      const obj = {
+        _rowIndex: rowIndex,
+        _isKitted: isKitted,
+        _isStarted: isStarted,
+        _isCompleted: isCompleted,
+        _startDate: row[12] || '',
+        _completedDate: row[13] || '',
+        _fullRow: row,
+      };
+      
+      // Map exact headers to their values based on fullHeaders index
+      displayHeaders.forEach((h) => {
+        const hIdx = fullHeaders.indexOf(h);
+        obj[h] = hIdx !== -1 ? (row[hIdx] || '') : '';
+      });
+      return obj;
+    });
+
+    return NextResponse.json({ success: true, headers: displayHeaders, rows: formattedRows });
+  } catch (error) {
+    console.error('GET Error:', error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+// ==========================================
+// POST → Handle Fullkitting / Start / Completed / Edit
+// ==========================================
+export async function POST(req) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { siteId, projectPlanRowIndex, action, items, editData, image } = body;
+
+    if (!siteId || !projectPlanRowIndex) {
+      return NextResponse.json({ success: false, message: 'Invalid payload' }, { status: 400 });
+    }
+
+    const sheets = await getSheetsClient();
+    const date = getFormattedDate();
+
+    // ----------------------------------------------------
+    // ACTION: START → Column M = Date, Column T = "Started"
+    // ----------------------------------------------------
+    if (action === 'start') {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: siteId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            { range: `Project Plan!M${projectPlanRowIndex}`, values: [[date]] },
+            { range: `Project Plan!T${projectPlanRowIndex}`, values: [['Started']] },
+          ],
+        },
+      });
+      return NextResponse.json({ success: true, message: 'Task Started successfully', date });
+    }
+
+    // --------------------------------------------------------
+    // ACTION: COMPLETE → Column N = Date, Column U = "Completed", Column Q = Image URL
+    // --------------------------------------------------------
+    if (action === 'complete') {
+      let imageUrl = '';
+      
+      // Upload image to Drive if provided
+      if (image && image.base64) {
+        imageUrl = await uploadImageToDrive({
+          base64: image.base64,
+          mimeType: image.mimeType || 'image/jpeg',
+          name: image.name || `completed_${Date.now()}.jpg`,
+        });
+      }
+
+      const updates = [
+        { range: `Project Plan!N${projectPlanRowIndex}`, values: [[date]] },
+        { range: `Project Plan!U${projectPlanRowIndex}`, values: [['Completed']] },
+      ];
+
+      // 🔥 Save Image URL to Column Q
+      if (imageUrl) {
+        updates.push({ range: `Project Plan!Q${projectPlanRowIndex}`, values: [[imageUrl]] });
+      }
+
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: siteId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: updates,
+        },
+      });
+      return NextResponse.json({ success: true, message: 'Task Completed successfully', date, imageUrl });
+    }
+
+    // ==========================================================================
+    // ACTION: EDIT → Update K & L in Project Plan + Append to Exception Change Log
+    // ==========================================================================
+    if (action === 'edit') {
+      if (!editData || !editData.plannedStart || !editData.plannedEnd) {
+        return NextResponse.json({ success: false, message: 'Planned dates are required' }, { status: 400 });
+      }
+
+      const rowResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: siteId,
+        range: `Project Plan!A${projectPlanRowIndex}:J${projectPlanRowIndex}`,
+      });
+
+      const rowData = (rowResponse.data.values && rowResponse.data.values[0]) || [];
+      while (rowData.length < 10) rowData.push('');
+
+      const plannedStart = formatInputDate(editData.plannedStart);
+      const plannedEnd = formatInputDate(editData.plannedEnd);
+      const remarks = editData.remarks || '';
+
+      const logRow = [
+        rowData[0] || '', rowData[1] || '', rowData[2] || '', rowData[3] || '',
+        rowData[4] || '', rowData[5] || '', rowData[6] || '', rowData[7] || '',
+        rowData[8] || '', rowData[9] || '', plannedStart, plannedEnd, remarks,
+      ];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: siteId,
+        range: 'Exception Change Log!A:M',
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: [logRow] },
+      });
+
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: siteId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            { range: `Project Plan!K${projectPlanRowIndex}`, values: [[plannedStart]] },
+            { range: `Project Plan!L${projectPlanRowIndex}`, values: [[plannedEnd]] },
+          ],
+        },
+      });
+
+      return NextResponse.json({ success: true, message: 'Exception logged & plan updated' });
+    }
+
+    // ----------------------------------------------------
+    // DEFAULT ACTION: FULLKITTING (Images upload + updates)
+    // ----------------------------------------------------
+    if (!Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ success: false, message: 'No items provided for kitting' }, { status: 400 });
+    }
+
+    const uploaded = await Promise.all(
+      items.map(async (it) => {
+        if (!it.image?.base64) {
+          throw new Error(`Photo missing for checklist row ${it.rowIndex}`);
+        }
+        const url = await uploadImageToDrive({
+          base64: it.image.base64,
+          mimeType: it.image.mimeType || 'image/jpeg',
+          name: it.image.name || `evidence_${Date.now()}.jpg`,
+        });
+        return { ...it, url };
+      })
+    );
+
+    const data = uploaded.map((it) => ({
+      range: `Full kitting Master!F${it.rowIndex}:I${it.rowIndex}`,
+      values: [[date, it.url, 'Done', it.remarks || '']],
+    }));
+
+    data.push({
+      range: `Project Plan!O${projectPlanRowIndex}`,
+      values: [['Done']],
+    });
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: siteId,
+      requestBody: { valueInputOption: 'USER_ENTERED', data },
+    });
+
+    return NextResponse.json({ success: true, message: 'Fullkitting submitted successfully', date });
+  } catch (error) {
+    console.error('POST Error:', error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
