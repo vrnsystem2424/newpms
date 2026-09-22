@@ -20,18 +20,17 @@
 // }
 
 // export default function ProjectPlanPage() {
-//   // Table data
+//   const [currentUser, setCurrentUser] = useState(null);
 //   const [sites, setSites] = useState([]);
 //   const [selectedSite, setSelectedSite] = useState('');
 //   const [headers, setHeaders] = useState([]);
 //   const [rows, setRows] = useState([]);
 
-//   // UI states
 //   const [loadingSites, setLoadingSites] = useState(true);
 //   const [loadingData, setLoadingData] = useState(false);
 //   const [error, setError] = useState('');
 
-//   // Fullkitting Modal states
+//   // Modals state
 //   const [modalOpen, setModalOpen] = useState(false);
 //   const [taskDetails, setTaskDetails] = useState(null);
 //   const [kittingItems, setKittingItems] = useState([]);
@@ -40,15 +39,18 @@
 //   const [submitting, setSubmitting] = useState(false);
 //   const [modalError, setModalError] = useState('');
 
-//   // Start / Completed Confirmation Modal states
+//   // ✅ View Kitting Modal State
+//   const [viewKittingModal, setViewKittingModal] = useState(false);
+//   const [viewKittingData, setViewKittingData] = useState([]);
+
 //   const [confirmModal, setConfirmModal] = useState({
 //     isOpen: false,
-//     type: null, // 'start' | 'complete'
+//     type: null, 
 //     row: null,
 //   });
 //   const [actionSubmitting, setActionSubmitting] = useState(false);
+//   const [completeFile, setCompleteFile] = useState(null);
 
-//   // Edit Modal state
 //   const [editModal, setEditModal] = useState({
 //     isOpen: false,
 //     row: null,
@@ -59,22 +61,55 @@
 //     error: '',
 //   });
 
-//   // 1. Load Sites
 //   useEffect(() => {
-//     fetch('/api/sites')
-//       .then((r) => r.json())
-//       .then((data) => {
-//         if (data.success) setSites(data.sites);
-//         else setError(data.message || 'Sites load nahi hui');
+//     const init = async () => {
+//       try {
+//         const [resSites, resUser] = await Promise.all([
+//           fetch('/api/sites'),
+//           fetch('/api/auth/me')
+//         ]);
+        
+//         const dataSites = await resSites.json();
+//         const dataUser = await resUser.json();
+
+//         let fetchedSites = dataSites.success ? dataSites.sites : [];
+//         const u = dataUser.success ? dataUser.user : null;
+//         setCurrentUser(u);
+
+//         const userRole = u?.type?.toLowerCase()?.trim() || '';
+//         const userSite = u?.site?.toLowerCase()?.trim() || '';
+
+//         if (userRole === 'site' && userSite) {
+//           const matched = fetchedSites.filter((s) => {
+//             const sName = (s.name || '').toLowerCase().trim();
+//             const sId = (s.id || '').toLowerCase().trim();
+//             return sName === userSite || sId === userSite || sName.includes(userSite) || userSite.includes(sName);
+//           });
+
+//           if (matched.length > 0) {
+//             fetchedSites = matched;
+//           }
+//         }
+
+//         setSites(fetchedSites);
+
+//         if (fetchedSites.length === 1) {
+//           setSelectedSite(fetchedSites[0].id);
+//         } else if (fetchedSites.length > 0 && userRole === 'site') {
+//           setSelectedSite(fetchedSites[0].id);
+//         }
+        
 //         setLoadingSites(false);
-//       })
-//       .catch(() => {
-//         setError('Sites load error');
+//       } catch (err) {
+//         console.error(err);
+//         setError('Data load error');
 //         setLoadingSites(false);
-//       });
+//       }
+//     };
+
+//     init();
 //   }, []);
 
-//   // 2. Table loader
 //   const loadPlan = () => {
 //     if (!selectedSite) {
 //       setHeaders([]);
@@ -107,18 +142,13 @@
 //     // eslint-disable-next-line
 //   }, [selectedSite]);
 
-//   // 3. Open Fullkitting Modal
+//   // FULLKITTING - UPLOAD MODAL
 //   const openFullkitting = (row) => {
 //     const activity = row[headers[3]] || '';
 //     const subActivity = row[headers[4]] || '';
 //     const uid = row[headers[0]] || '';
 
-//     setTaskDetails({
-//       rowIndex: row._rowIndex,
-//       uid,
-//       activity,
-//       subActivity,
-//     });
+//     setTaskDetails({ rowIndex: row._rowIndex, uid, activity, subActivity });
 //     setModalOpen(true);
 //     setLoadingKitting(true);
 //     setKittingItems([]);
@@ -142,7 +172,40 @@
 //       });
 //   };
 
-//   // 4. Submit Fullkitting Form
+//   // ✅ FULLKITTING - VIEW MODAL (For Senior Engineer/Admin)
+//   const openViewKitting = (row) => {
+//     const activity = row[headers[3]] || '';
+//     const subActivity = row[headers[4]] || '';
+//     const uid = row[headers[0]] || '';
+
+//     setTaskDetails({ uid, activity, subActivity });
+//     setViewKittingModal(true);
+//     setLoadingKitting(true);
+//     setViewKittingData([]);
+//     setModalError('');
+
+//     const url = `/api/project-plan?action=getKitting&siteId=${encodeURIComponent(
+//       selectedSite
+//     )}&activity=${encodeURIComponent(activity)}&subActivity=${encodeURIComponent(subActivity)}`;
+
+//     fetch(url)
+//       .then((r) => r.json())
+//       .then((data) => {
+//         if (data.success) {
+//           // Only show items that have been marked as 'Done'
+//           const completedItems = (data.items || []).filter(item => item.status?.toLowerCase() === 'done');
+//           setViewKittingData(completedItems);
+//         } else {
+//           setModalError(data.message || 'Load failed');
+//         }
+//         setLoadingKitting(false);
+//       })
+//       .catch(() => {
+//         setModalError('Server error');
+//         setLoadingKitting(false);
+//       });
+//   };
+
 //   const handleFullkittingSubmit = async () => {
 //     setModalError('');
 //     const missing = kittingItems.find((it) => !formState[it.rowIndex]?.file);
@@ -188,13 +251,22 @@
 //     }
 //   };
 
-//   // 5. Open Start / Complete Confirmation Modal
 //   const openConfirmModal = (type, row) => {
+//     setCompleteFile(null);
 //     setConfirmModal({ isOpen: true, type, row });
 //   };
 
 //   const handleConfirmAction = async () => {
 //     if (!confirmModal.row || !confirmModal.type) return;
+
+//     let imagePayload = null;
+//     if (confirmModal.type === 'complete') {
+//       if (!completeFile) {
+//         alert('Please upload an evidence photo to mark as completed.');
+//         return;
+//       }
+//       imagePayload = await fileToBase64(completeFile);
+//     }
 
 //     setActionSubmitting(true);
 //     try {
@@ -205,12 +277,14 @@
 //           siteId: selectedSite,
 //           projectPlanRowIndex: confirmModal.row._rowIndex,
 //           action: confirmModal.type,
+//           image: imagePayload,
 //         }),
 //       });
 
 //       const data = await res.json();
 //       if (data.success) {
 //         setConfirmModal({ isOpen: false, type: null, row: null });
+//         setCompleteFile(null);
 //         loadPlan();
 //       } else {
 //         alert(data.message || 'Action update failed');
@@ -222,7 +296,6 @@
 //     }
 //   };
 
-//   // 6. Open Edit Modal
 //   const openEditModal = (row) => {
 //     setEditModal({
 //       isOpen: true,
@@ -247,7 +320,6 @@
 //     });
 //   };
 
-//   // 7. Submit Edit Form
 //   const handleEditSubmit = async () => {
 //     if (!editModal.plannedStart || !editModal.plannedEnd) {
 //       setEditModal((s) => ({ ...s, error: 'Please select both dates' }));
@@ -289,16 +361,17 @@
 //   };
 
 //   const selectedSiteName = sites.find((s) => s.id === selectedSite)?.name || '';
+  
+//   // ROLE CHECKS
+//   const userRole = currentUser?.type?.toLowerCase() || '';
+//   const isSiteUser = userRole === 'site';
+//   const isSeniorEngineer = userRole.includes('senior') || userRole.includes('sinior');
 
 //   return (
 //     <div className="w-full max-w-none">
-//       {/* Page header */}
 //       <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4">
 //         <div className="min-w-0">
-//           <p
-//             className="text-xs font-semibold uppercase tracking-wider mb-1"
-//             style={{ color: 'var(--accent)' }}
-//           >
+//           <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--accent)' }}>
 //             Module
 //           </p>
 //           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Project Plan</h1>
@@ -307,7 +380,6 @@
 //           </p>
 //         </div>
 
-//         {/* Site Selector and Refresh Button */}
 //         <div className="w-full lg:w-auto lg:min-w-[340px] lg:max-w-[400px] flex items-end gap-2">
 //           <div className="flex-1">
 //             <label className="label">Select Site</label>
@@ -315,15 +387,11 @@
 //               className="input-field w-full"
 //               value={selectedSite}
 //               onChange={(e) => setSelectedSite(e.target.value)}
-//               disabled={loadingSites}
+//               disabled={loadingSites || (isSiteUser && sites.length === 1)}
 //             >
-//               <option value="">
-//                 {loadingSites ? 'Loading sites...' : '-- Choose a site --'}
-//               </option>
+//               <option value="">{loadingSites ? 'Loading sites...' : '-- Choose a site --'}</option>
 //               {sites.map((s) => (
-//                 <option key={s.id} value={s.id}>
-//                   {s.name}
-//                 </option>
+//                 <option key={s.id} value={s.id}>{s.name}</option>
 //               ))}
 //             </select>
 //           </div>
@@ -342,10 +410,7 @@
 //               title="Refresh Plan Data"
 //             >
 //               {loadingData ? (
-//                 <span
-//                   className="w-4 h-4 border-2 rounded-full animate-spin shrink-0"
-//                   style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }}
-//                 />
+//                 <span className="w-4 h-4 border-2 rounded-full animate-spin shrink-0" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
 //               ) : (
 //                 <span className="shrink-0">🔄</span>
 //               )}
@@ -356,14 +421,7 @@
 //       </div>
 
 //       {error && (
-//         <div
-//           className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium"
-//           style={{
-//             background: 'var(--danger-soft)',
-//             color: 'var(--danger)',
-//             border: '1px solid #fecaca',
-//           }}
-//         >
+//         <div className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid #fecaca' }}>
 //           {error}
 //         </div>
 //       )}
@@ -371,10 +429,7 @@
 //       {/* Table */}
 //       <div className="card w-full overflow-hidden">
 //         {selectedSite && !loadingData && rows.length > 0 && (
-//           <div
-//             className="px-3 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2"
-//             style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
-//           >
+//           <div className="px-3 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
 //             <div className="text-sm truncate">
 //               <span style={{ color: 'var(--text-muted)' }}>Site: </span>
 //               <span className="font-semibold">{selectedSiteName}</span>
@@ -387,13 +442,8 @@
 
 //         {!selectedSite && !loadingData && (
 //           <div className="p-8 sm:p-12 text-center">
-//             <div
-//               className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-4"
-//               style={{ background: 'var(--primary-soft)' }}
-//             >
-//               <span className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>
-//                 →
-//               </span>
+//             <div className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-4" style={{ background: 'var(--primary-soft)' }}>
+//               <span className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>→</span>
 //             </div>
 //             <p className="font-medium">Select a site to begin</p>
 //           </div>
@@ -401,13 +451,8 @@
 
 //         {loadingData && (
 //           <div className="p-8 sm:p-12 text-center">
-//             <div
-//               className="inline-block w-8 h-8 rounded-full border-2 animate-spin"
-//               style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }}
-//             />
-//             <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>
-//               Loading project plan...
-//             </p>
+//             <div className="inline-block w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+//             <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>Loading project plan...</p>
 //           </div>
 //         )}
 
@@ -437,15 +482,7 @@
 //                       {h}
 //                     </th>
 //                   ))}
-//                   <th
-//                     className="px-3 sm:px-4 py-2.5 sm:py-3 text-center font-semibold whitespace-nowrap"
-//                     style={{
-//                       color: '#fff',
-//                       fontSize: '0.7rem',
-//                       textTransform: 'uppercase',
-//                       letterSpacing: '0.04em',
-//                     }}
-//                   >
+//                   <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-center font-semibold whitespace-nowrap" style={{ color: '#fff', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
 //                     Actions
 //                   </th>
 //                 </tr>
@@ -456,6 +493,9 @@
 //                   const isStarted = row._isStarted;
 //                   const isCompleted = row._isCompleted;
 
+//                   const canStart = isKitted && !isStarted; 
+//                   const canComplete = isStarted && !isCompleted; 
+
 //                   return (
 //                     <tr
 //                       key={rIdx}
@@ -465,29 +505,28 @@
 //                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
 //                     >
 //                       {headers.map((h, cIdx) => (
-//                         <td
-//                           key={cIdx}
-//                           className="px-3 sm:px-4 py-2 sm:py-2.5 whitespace-nowrap"
-//                           style={{ color: 'var(--text-main)' }}
-//                         >
+//                         <td key={cIdx} className="px-3 sm:px-4 py-2 sm:py-2.5 whitespace-nowrap" style={{ color: 'var(--text-main)' }}>
 //                           {row[h] ? row[h] : <span style={{ color: 'var(--text-soft)' }}>—</span>}
 //                         </td>
 //                       ))}
-
-//                       {/* Action Buttons */}
+                      
 //                       <td className="px-3 sm:px-4 py-2 sm:py-2.5 text-center">
 //                         <div className="flex items-center justify-center gap-2 flex-wrap">
-//                           {/* 1. Fullkitting */}
+                          
+//                           {/* 1. Fullkitting — SE ke liye disable */}
 //                           <button
-//                             onClick={() => openFullkitting(row)}
-//                             disabled={isKitted}
+//                             onClick={() => {
+//                               if (!isSeniorEngineer) openFullkitting(row);
+//                             }}
+//                             disabled={isKitted || isSeniorEngineer}
+//                             title={isSeniorEngineer ? "Only Site User can upload fullkitting" : ""}
 //                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
-//                               isKitted
+//                               isKitted || isSeniorEngineer
 //                                 ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-600'
 //                                 : 'text-white hover:scale-105'
 //                             }`}
 //                             style={
-//                               !isKitted
+//                               !(isKitted || isSeniorEngineer)
 //                                 ? { background: 'var(--primary)', boxShadow: '0 2px 6px rgba(15, 92, 86, 0.25)' }
 //                                 : {}
 //                             }
@@ -495,25 +534,57 @@
 //                             {isKitted ? 'Fullkitted ✓' : 'Fullkitting'}
 //                           </button>
 
-//                           {/* 2. Start */}
+//                           {/* ✅ VIEW KITTING PHOTOS (Only visible if kitted) */}
+//                           {isKitted && (
+//                             <button
+//                               onClick={() => openViewKitting(row)}
+//                               className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all bg-purple-100 text-purple-700 hover:bg-purple-200 hover:scale-105 shadow-sm"
+//                             >
+//                               👁 View Photos
+//                             </button>
+//                           )}
+
+//                           {/* 2. Start — Site user ke liye hamesha DISABLE */}
 //                           <button
-//                             onClick={() => openConfirmModal('start', row)}
-//                             disabled={isStarted}
+//                             onClick={() => {
+//                               if (!isSiteUser) openConfirmModal('start', row);
+//                             }}
+//                             disabled={isSiteUser || !canStart}
+//                             title={
+//                               isSiteUser
+//                                 ? 'Site user Start nahi kar sakta'
+//                                 : !isKitted
+//                                 ? 'Pehle Fullkitting complete karein'
+//                                 : ''
+//                             }
 //                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
 //                               isStarted
 //                                 ? 'opacity-50 cursor-not-allowed bg-blue-100 text-blue-800'
-//                                 : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105'
+//                                 : isSiteUser || !isKitted
+//                                 ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500'
+//                                 : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-md'
 //                             }`}
-//                             style={!isStarted ? { boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)' } : {}}
 //                           >
 //                             {isStarted ? 'Started ✓' : 'Start'}
 //                           </button>
 
-//                           {/* 3. Edit (NEW) */}
+//                           {/* 3. Edit — Site user ke liye hamesha DISABLE */}
 //                           <button
-//                             onClick={() => openEditModal(row)}
-//                             className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all bg-amber-500 text-white hover:bg-amber-600 hover:scale-105"
-//                             style={{ boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)' }}
+//                             onClick={() => {
+//                               if (!isSiteUser) openEditModal(row);
+//                             }}
+//                             disabled={isSiteUser}
+//                             title={isSiteUser ? 'Site user Edit nahi kar sakta' : ''}
+//                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
+//                               isSiteUser
+//                                 ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-600'
+//                                 : 'bg-amber-500 text-white hover:bg-amber-600 hover:scale-105'
+//                             }`}
+//                             style={
+//                               !isSiteUser
+//                                 ? { boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)' }
+//                                 : {}
+//                             }
 //                           >
 //                             ✎ Edit
 //                           </button>
@@ -521,13 +592,21 @@
 //                           {/* 4. Completed */}
 //                           <button
 //                             onClick={() => openConfirmModal('complete', row)}
-//                             disabled={isCompleted}
+//                             disabled={!canComplete}
+//                             title={
+//                               isCompleted
+//                                 ? ''
+//                                 : !isStarted
+//                                 ? 'Pehle Task Start hona chahiye'
+//                                 : ''
+//                             }
 //                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
 //                               isCompleted
 //                                 ? 'opacity-50 cursor-not-allowed bg-green-100 text-green-800'
-//                                 : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105'
+//                                 : !isStarted
+//                                 ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500'
+//                                 : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 shadow-md'
 //                             }`}
-//                             style={!isCompleted ? { boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)' } : {}}
 //                           >
 //                             {isCompleted ? 'Completed ✓' : 'Completed'}
 //                           </button>
@@ -542,9 +621,68 @@
 //         )}
 //       </div>
 
-//       {/* ========================================== */}
-//       {/* START / COMPLETE CONFIRMATION MODAL */}
-//       {/* ========================================== */}
+//       {/* VIEW KITTING MODAL (Read-Only) */}
+//       {viewKittingModal && (
+//         <div className="fixed inset-0 z-[105] flex items-center justify-center p-2 sm:p-4" style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}>
+//           <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden" style={{ background: 'var(--surface)' }}>
+//             <div className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+//               <div className="min-w-0">
+//                 <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-600">View Uploaded Evidence — {taskDetails?.uid}</p>
+//                 <h2 className="text-lg font-semibold truncate">{taskDetails?.activity} <span style={{ color: 'var(--text-muted)' }}>›</span> {taskDetails?.subActivity}</h2>
+//               </div>
+//               <button onClick={() => setViewKittingModal(false)} className="w-9 h-9 rounded-lg border flex items-center justify-center font-bold" style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}>✕</button>
+//             </div>
+            
+//             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
+//               {loadingKitting && (
+//                 <div className="py-12 text-center">
+//                   <div className="inline-block w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+//                   <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>Loading evidence...</p>
+//                 </div>
+//               )}
+              
+//               {!loadingKitting && viewKittingData.length === 0 && !modalError && (
+//                 <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No uploaded evidence found for this task.</div>
+//               )}
+              
+//               {modalError && (
+//                 <div className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid #fecaca' }}>{modalError}</div>
+//               )}
+              
+//               <div className="space-y-4">
+//                 {viewKittingData.map((it, idx) => (
+//                   <div key={it.rowIndex} className="rounded-[12px] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+//                     <p className="font-semibold text-sm mb-3">{idx + 1}. {it.checklist}</p>
+//                     <div className="flex flex-wrap gap-4 items-center p-3 rounded-lg border bg-white" style={{ borderColor: 'var(--border-strong)' }}>
+//                       {it.imageUrl ? (
+//                         <a href={it.imageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+//                           <span className="text-lg">🖼️</span> View Uploaded Photo
+//                         </a>
+//                       ) : (
+//                         <span className="text-sm text-gray-400">No Photo Available</span>
+//                       )}
+                      
+//                       {it.remarks && (
+//                         <span className="text-sm text-gray-700 border-l pl-4 border-gray-300">
+//                           <span className="font-medium text-gray-500">Remarks:</span> {it.remarks}
+//                         </span>
+//                       )}
+//                     </div>
+//                   </div>
+//                 ))}
+//               </div>
+//             </div>
+            
+//             <div className="px-4 sm:px-6 py-3 border-t text-right" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+//               <button onClick={() => setViewKittingModal(false)} className="text-sm font-semibold px-5 py-2 rounded-[10px] border bg-gray-50 text-gray-700 hover:bg-gray-100">
+//                 Close
+//               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* CONFIRM MODAL */}
 //       {confirmModal.isOpen && (
 //         <div
 //           className="fixed inset-0 z-[120] flex items-center justify-center p-4"
@@ -557,10 +695,7 @@
 //             <div
 //               className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-xl font-bold"
 //               style={{
-//                 background:
-//                   confirmModal.type === 'start'
-//                     ? 'rgba(37, 99, 235, 0.12)'
-//                     : 'rgba(16, 185, 129, 0.12)',
+//                 background: confirmModal.type === 'start' ? 'rgba(37, 99, 235, 0.12)' : 'rgba(16, 185, 129, 0.12)',
 //                 color: confirmModal.type === 'start' ? '#2563eb' : '#10b981',
 //               }}
 //             >
@@ -571,16 +706,40 @@
 //               Confirm {confirmModal.type === 'start' ? 'Task Start' : 'Task Completion'}?
 //             </h3>
 
-//             <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-//               Kya aap sure hain ki Task <b>{confirmModal.row?.[headers[0]] || ''}</b> ({confirmModal.row?.[headers[3]] || ''}) ko{' '}
+//             <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
+//               Kya aap sure hain ki Task <b>{confirmModal.row?.[headers[0]] || ''}</b> ko{' '}
 //               <b>{confirmModal.type === 'start' ? 'Start' : 'Completed'}</b> mark karna chahte hain?
 //             </p>
 
-//             <div className="flex gap-3 justify-center">
+//             {confirmModal.type === 'complete' && (
+//               <div className="mb-6 text-left p-3 rounded-lg bg-slate-50 border border-slate-200">
+//                 <label className="label mb-2 block font-semibold text-sm">Upload Evidence Photo *</label>
+//                 <input
+//                   type="file"
+//                   accept="image/*"
+//                   className="hidden"
+//                   id="complete-file-upload"
+//                   onChange={(e) => setCompleteFile(e.target.files?.[0] || null)}
+//                 />
+//                 <label
+//                   htmlFor="complete-file-upload"
+//                   className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-[10px] border-2 border-dashed cursor-pointer text-sm font-medium transition-colors"
+//                   style={{
+//                     borderColor: completeFile ? 'var(--primary)' : 'var(--border-strong)',
+//                     color: completeFile ? 'var(--primary)' : 'var(--text-muted)',
+//                     background: completeFile ? 'var(--primary-soft)' : 'var(--surface)',
+//                   }}
+//                 >
+//                   {completeFile ? `✓ ${completeFile.name}` : '📷 Click to choose photo'}
+//                 </label>
+//               </div>
+//             )}
+
+//             <div className="flex gap-3 justify-center mt-4">
 //               <button
 //                 type="button"
 //                 disabled={actionSubmitting}
-//                 onClick={() => setConfirmModal({ isOpen: false, type: null, row: null })}
+//                 onClick={() => { setConfirmModal({ isOpen: false, type: null, row: null }); setCompleteFile(null); }}
 //                 className="px-5 py-2 text-sm font-semibold rounded-xl border"
 //                 style={{ borderColor: 'var(--border-strong)', color: 'var(--text-muted)' }}
 //               >
@@ -601,337 +760,103 @@
 //         </div>
 //       )}
 
-//       {/* ========================================== */}
-//       {/* EDIT MODAL (NEW) */}
-//       {/* ========================================== */}
+//       {/* EDIT MODAL */}
 //       {editModal.isOpen && (
-//         <div
-//           className="fixed inset-0 z-[115] flex items-center justify-center p-4"
-//           style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)' }}
-//         >
-//           <div
-//             className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
-//             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-//           >
-//             {/* Header */}
-//             <div
-//               className="px-5 py-4 border-b flex items-center justify-between"
-//               style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
-//             >
+//         <div className="fixed inset-0 z-[115] flex items-center justify-center p-4" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)' }}>
+//           <div className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+//             <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
 //               <div>
-//                 <p
-//                   className="text-[10px] font-semibold uppercase tracking-wider"
-//                   style={{ color: 'var(--accent)' }}
-//                 >
-//                   Edit / Exception — {editModal.row?.[headers[0]] || ''}
-//                 </p>
-//                 <h2 className="text-base font-semibold mt-0.5">
-//                   {editModal.row?.[headers[3]] || ''}{' '}
-//                   <span style={{ color: 'var(--text-muted)' }}>›</span>{' '}
-//                   {editModal.row?.[headers[4]] || ''}
-//                 </h2>
+//                 <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>Edit / Exception</p>
+//                 <h2 className="text-base font-semibold mt-0.5">{editModal.row?.[headers[3]] || ''}</h2>
 //               </div>
-//               <button
-//                 onClick={closeEditModal}
-//                 disabled={editModal.submitting}
-//                 className="w-9 h-9 rounded-lg border shrink-0 flex items-center justify-center font-bold"
-//                 style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}
-//               >
-//                 ✕
-//               </button>
+//               <button onClick={closeEditModal} disabled={editModal.submitting} className="w-9 h-9 rounded-lg border font-bold text-gray-500">✕</button>
 //             </div>
-
-//             {/* Body */}
 //             <div className="px-5 py-5 space-y-4">
-//               {editModal.error && (
-//                 <div
-//                   className="rounded-[10px] px-4 py-2 text-sm font-medium"
-//                   style={{
-//                     background: 'var(--danger-soft)',
-//                     color: 'var(--danger)',
-//                     border: '1px solid #fecaca',
-//                   }}
-//                 >
-//                   {editModal.error}
-//                 </div>
-//               )}
-
+//               {editModal.error && <div className="rounded-[10px] px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200">{editModal.error}</div>}
 //               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 //                 <div>
 //                   <label className="label">Next Planned Start Date *</label>
-//                   <input
-//                     type="date"
-//                     className="input-field w-full"
-//                     value={editModal.plannedStart}
-//                     onChange={(e) =>
-//                       setEditModal((s) => ({ ...s, plannedStart: e.target.value }))
-//                     }
-//                     disabled={editModal.submitting}
-//                   />
+//                   <input type="date" className="input-field w-full" value={editModal.plannedStart} onChange={(e) => setEditModal((s) => ({ ...s, plannedStart: e.target.value }))} disabled={editModal.submitting} />
 //                 </div>
 //                 <div>
 //                   <label className="label">Next Planned End Date *</label>
-//                   <input
-//                     type="date"
-//                     className="input-field w-full"
-//                     value={editModal.plannedEnd}
-//                     onChange={(e) =>
-//                       setEditModal((s) => ({ ...s, plannedEnd: e.target.value }))
-//                     }
-//                     disabled={editModal.submitting}
-//                   />
+//                   <input type="date" className="input-field w-full" value={editModal.plannedEnd} onChange={(e) => setEditModal((s) => ({ ...s, plannedEnd: e.target.value }))} disabled={editModal.submitting} />
 //                 </div>
 //               </div>
-
 //               <div>
 //                 <label className="label">Remarks</label>
-//                 <textarea
-//                   rows={3}
-//                   className="input-field w-full"
-//                   placeholder="Reason for change / notes..."
-//                   value={editModal.remarks}
-//                   onChange={(e) =>
-//                     setEditModal((s) => ({ ...s, remarks: e.target.value }))
-//                   }
-//                   disabled={editModal.submitting}
-//                 />
+//                 <textarea rows={3} className="input-field w-full" value={editModal.remarks} onChange={(e) => setEditModal((s) => ({ ...s, remarks: e.target.value }))} disabled={editModal.submitting} />
 //               </div>
-
-//               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-//                 Note: Yeh entry <b>Exception Change Log</b> me save hogi aur Project Plan me{' '}
-//                 <b>Planned Start (K)</b> & <b>Planned End (L)</b> update ho jayengi.
-//               </p>
 //             </div>
-
-//             {/* Footer */}
-//             <div
-//               className="px-5 py-3 border-t flex justify-end gap-2"
-//               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-//             >
-//               <button
-//                 onClick={closeEditModal}
-//                 disabled={editModal.submitting}
-//                 className="text-sm font-semibold px-4 py-2 rounded-[10px] border"
-//                 style={{
-//                   borderColor: 'var(--border-strong)',
-//                   color: 'var(--text-muted)',
-//                   background: 'var(--surface)',
-//                 }}
-//               >
-//                 Cancel
-//               </button>
-//               <button
-//                 onClick={handleEditSubmit}
-//                 disabled={editModal.submitting}
-//                 className="text-sm font-semibold px-5 py-2 rounded-[10px] text-white transition-transform hover:scale-105"
-//                 style={{
-//                   background: '#f59e0b',
-//                   boxShadow: '0 2px 6px rgba(245, 158, 11, 0.35)',
-//                 }}
-//               >
-//                 {editModal.submitting ? 'Saving...' : 'Save Changes'}
-//               </button>
+//             <div className="px-5 py-3 border-t flex justify-end gap-2" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+//               <button onClick={closeEditModal} disabled={editModal.submitting} className="text-sm font-semibold px-4 py-2 rounded-[10px] border text-gray-500">Cancel</button>
+//               <button onClick={handleEditSubmit} disabled={editModal.submitting} className="text-sm font-semibold px-5 py-2 rounded-[10px] text-white bg-amber-500">{editModal.submitting ? 'Saving...' : 'Save Changes'}</button>
 //             </div>
 //           </div>
 //         </div>
 //       )}
 
-//       {/* ========================================== */}
-//       {/* FULLKITTING CHECKLIST MODAL */}
-//       {/* ========================================== */}
+//       {/* FULLKITTING UPLOAD MODAL */}
 //       {modalOpen && (
-//         <div
-//           className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4"
-//           style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}
-//         >
-//           <div
-//             className="w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden"
-//             style={{ background: 'var(--surface)' }}
-//           >
-//             {/* Header */}
-//             <div
-//               className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3"
-//               style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
-//             >
+//         <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4" style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}>
+//           <div className="w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden" style={{ background: 'var(--surface)' }}>
+//             <div className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
 //               <div className="min-w-0">
-//                 <p
-//                   className="text-[10px] font-semibold uppercase tracking-wider"
-//                   style={{ color: 'var(--accent)' }}
-//                 >
-//                   Full Kitting — {taskDetails?.uid}
-//                 </p>
-//                 <h2 className="text-lg font-semibold truncate">
-//                   {taskDetails?.activity}{' '}
-//                   <span style={{ color: 'var(--text-muted)' }}>›</span>{' '}
-//                   {taskDetails?.subActivity}
-//                 </h2>
+//                 <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>Full Kitting — {taskDetails?.uid}</p>
+//                 <h2 className="text-lg font-semibold truncate">{taskDetails?.activity} <span style={{ color: 'var(--text-muted)' }}>›</span> {taskDetails?.subActivity}</h2>
 //               </div>
-//               <button
-//                 onClick={() => setModalOpen(false)}
-//                 className="w-9 h-9 rounded-lg border shrink-0 flex items-center justify-center font-bold"
-//                 style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}
-//               >
-//                 ✕
-//               </button>
+//               <button onClick={() => setModalOpen(false)} className="w-9 h-9 rounded-lg border flex items-center justify-center font-bold" style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}>✕</button>
 //             </div>
-
-//             {/* Body */}
 //             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
 //               {loadingKitting && (
 //                 <div className="py-12 text-center">
-//                   <div
-//                     className="inline-block w-8 h-8 rounded-full border-2 animate-spin"
-//                     style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }}
-//                   />
-//                   <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>
-//                     Loading checklist...
-//                   </p>
+//                   <div className="inline-block w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+//                   <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>Loading checklist...</p>
 //                 </div>
 //               )}
-
 //               {!loadingKitting && kittingItems.length === 0 && !modalError && (
-//                 <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-//                   Is activity ke liye Full Kitting Master me koi checklist nahi mili
-//                 </div>
+//                 <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Is activity ke liye Full Kitting Master me koi checklist nahi mili</div>
 //               )}
-
 //               {modalError && (
-//                 <div
-//                   className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium"
-//                   style={{
-//                     background: 'var(--danger-soft)',
-//                     color: 'var(--danger)',
-//                     border: '1px solid #fecaca',
-//                   }}
-//                 >
-//                   {modalError}
-//                 </div>
+//                 <div className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid #fecaca' }}>{modalError}</div>
 //               )}
-
 //               <div className="space-y-4">
 //                 {kittingItems.map((it, idx) => {
 //                   const state = formState[it.rowIndex] || {};
 //                   return (
-//                     <div
-//                       key={it.rowIndex}
-//                       className="rounded-[12px] border p-4"
-//                       style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
-//                     >
+//                     <div key={it.rowIndex} className="rounded-[12px] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
 //                       <div className="flex items-start gap-3 mb-3">
-//                         <div
-//                           className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-//                           style={{ background: 'var(--primary)', color: '#fff' }}
-//                         >
-//                           {idx + 1}
-//                         </div>
+//                         <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ background: 'var(--primary)', color: '#fff' }}>{idx + 1}</div>
 //                         <div className="min-w-0 flex-1">
 //                           <p className="font-semibold text-sm leading-snug">{it.checklist}</p>
 //                           <div className="flex flex-wrap gap-2 mt-2">
-//                             {it.verificationType && (
-//                               <span
-//                                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-//                                 style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}
-//                               >
-//                                 {it.verificationType}
-//                               </span>
-//                             )}
-//                             {it.responsibleRole && (
-//                               <span
-//                                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-//                                 style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
-//                               >
-//                                 {it.responsibleRole}
-//                               </span>
-//                             )}
+//                             {it.verificationType && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>{it.verificationType}</span>}
+//                             {it.responsibleRole && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{it.responsibleRole}</span>}
 //                           </div>
 //                         </div>
 //                       </div>
-
-//                       {/* Photo Upload */}
 //                       <div className="mb-3">
 //                         <label className="label">Evidence Photo *</label>
-//                         <input
-//                           type="file"
-//                           accept="image/*"
-//                           className="hidden"
-//                           id={`file-${it.rowIndex}`}
-//                           onChange={(e) =>
-//                             setFormState((s) => ({
-//                               ...s,
-//                               [it.rowIndex]: {
-//                                 ...(s[it.rowIndex] || {}),
-//                                 file: e.target.files?.[0] || null,
-//                               },
-//                             }))
-//                           }
-//                         />
-//                         <label
-//                           htmlFor={`file-${it.rowIndex}`}
-//                           className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-[10px] border-2 border-dashed cursor-pointer text-sm font-medium transition-colors"
-//                           style={{
-//                             borderColor: state.file ? 'var(--primary)' : 'var(--border-strong)',
-//                             color: state.file ? 'var(--primary)' : 'var(--text-muted)',
-//                             background: state.file ? 'var(--primary-soft)' : 'var(--surface)',
-//                           }}
-//                         >
+//                         <input type="file" accept="image/*" className="hidden" id={`file-${it.rowIndex}`} onChange={(e) => setFormState((s) => ({ ...s, [it.rowIndex]: { ...(s[it.rowIndex] || {}), file: e.target.files?.[0] || null } }))} />
+//                         <label htmlFor={`file-${it.rowIndex}`} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-[10px] border-2 border-dashed cursor-pointer text-sm font-medium transition-colors" style={{ borderColor: state.file ? 'var(--primary)' : 'var(--border-strong)', color: state.file ? 'var(--primary)' : 'var(--text-muted)', background: state.file ? 'var(--primary-soft)' : 'var(--surface)' }}>
 //                           {state.file ? `✓ ${state.file.name}` : '📷 Click to upload photo'}
 //                         </label>
 //                       </div>
-
-//                       {/* Remarks */}
 //                       <div>
 //                         <label className="label">Remarks (optional)</label>
-//                         <textarea
-//                           rows={2}
-//                           className="input-field"
-//                           placeholder="Koi note ho to yahan likhein..."
-//                           value={state.remarks || ''}
-//                           onChange={(e) =>
-//                             setFormState((s) => ({
-//                               ...s,
-//                               [it.rowIndex]: {
-//                                 ...(s[it.rowIndex] || {}),
-//                                 remarks: e.target.value,
-//                               },
-//                             }))
-//                           }
-//                         />
+//                         <textarea rows={2} className="input-field" placeholder="Koi note ho to yahan likhein..." value={state.remarks || ''} onChange={(e) => setFormState((s) => ({ ...s, [it.rowIndex]: { ...(s[it.rowIndex] || {}), remarks: e.target.value } }))} />
 //                       </div>
 //                     </div>
 //                   );
 //                 })}
 //               </div>
 //             </div>
-
-//             {/* Footer */}
 //             {kittingItems.length > 0 && (
-//               <div
-//                 className="px-4 sm:px-6 py-3 border-t flex items-center justify-between gap-3"
-//                 style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-//               >
-//                 <p className="text-xs hidden sm:block" style={{ color: 'var(--text-muted)' }}>
-//                   Sab items submit hone par Full Kitting Master me update ho jayegi
-//                 </p>
+//               <div className="px-4 sm:px-6 py-3 border-t flex items-center justify-between gap-3" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+//                 <p className="text-xs hidden sm:block" style={{ color: 'var(--text-muted)' }}>Sab items submit hone par Full Kitting Master me update ho jayegi</p>
 //                 <div className="flex gap-2 ml-auto">
-//                   <button
-//                     onClick={() => setModalOpen(false)}
-//                     disabled={submitting}
-//                     className="text-sm font-semibold px-4 py-2 rounded-[10px] border"
-//                     style={{
-//                       borderColor: 'var(--border-strong)',
-//                       color: 'var(--text-muted)',
-//                       background: 'var(--surface)',
-//                     }}
-//                   >
-//                     Cancel
-//                   </button>
-//                   <button
-//                     onClick={handleFullkittingSubmit}
-//                     disabled={submitting}
-//                     className="btn-primary px-5 py-2"
-//                   >
-//                     {submitting ? 'Uploading...' : 'Submit & Update'}
-//                   </button>
+//                   <button onClick={() => setModalOpen(false)} disabled={submitting} className="text-sm font-semibold px-4 py-2 rounded-[10px] border" style={{ borderColor: 'var(--border-strong)', color: 'var(--text-muted)', background: 'var(--surface)' }}>Cancel</button>
+//                   <button onClick={handleFullkittingSubmit} disabled={submitting} className="btn-primary px-5 py-2">{submitting ? 'Uploading...' : 'Submit & Update'}</button>
 //                 </div>
 //               </div>
 //             )}
@@ -949,6 +874,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
+// Google Drive URL → Direct Image View URL Helper
+function formatDriveImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:image')) return url;
+
+  // Extract file ID from various Google Drive URL formats
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) {
+    return `https://lh3.googleusercontent.com/d/${match[1]}`;
+  }
+  return url;
+}
 
 // File → base64 helper
 function fileToBase64(file) {
@@ -968,6 +906,7 @@ function fileToBase64(file) {
 }
 
 export default function ProjectPlanPage() {
+  const [currentUser, setCurrentUser] = useState(null);
   const [sites, setSites] = useState([]);
   const [selectedSite, setSelectedSite] = useState('');
   const [headers, setHeaders] = useState([]);
@@ -977,6 +916,7 @@ export default function ProjectPlanPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
 
+  // Modals state
   const [modalOpen, setModalOpen] = useState(false);
   const [taskDetails, setTaskDetails] = useState(null);
   const [kittingItems, setKittingItems] = useState([]);
@@ -985,13 +925,17 @@ export default function ProjectPlanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
 
+  // ✅ View Kitting Modal & Lightbox State
+  const [viewKittingModal, setViewKittingModal] = useState(false);
+  const [viewKittingData, setViewKittingData] = useState([]);
+  const [lightboxImage, setLightboxImage] = useState(null);
+
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     type: null, 
     row: null,
   });
   const [actionSubmitting, setActionSubmitting] = useState(false);
-  
   const [completeFile, setCompleteFile] = useState(null);
 
   const [editModal, setEditModal] = useState({
@@ -1005,17 +949,52 @@ export default function ProjectPlanPage() {
   });
 
   useEffect(() => {
-    fetch('/api/sites')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) setSites(data.sites);
-        else setError(data.message || 'Sites load nahi hui');
+    const init = async () => {
+      try {
+        const [resSites, resUser] = await Promise.all([
+          fetch('/api/sites'),
+          fetch('/api/auth/me')
+        ]);
+        
+        const dataSites = await resSites.json();
+        const dataUser = await resUser.json();
+
+        let fetchedSites = dataSites.success ? dataSites.sites : [];
+        const u = dataUser.success ? dataUser.user : null;
+        setCurrentUser(u);
+
+        const userRole = u?.type?.toLowerCase()?.trim() || '';
+        const userSite = u?.site?.toLowerCase()?.trim() || '';
+
+        if (userRole === 'site' && userSite) {
+          const matched = fetchedSites.filter((s) => {
+            const sName = (s.name || '').toLowerCase().trim();
+            const sId = (s.id || '').toLowerCase().trim();
+            return sName === userSite || sId === userSite || sName.includes(userSite) || userSite.includes(sName);
+          });
+
+          if (matched.length > 0) {
+            fetchedSites = matched;
+          }
+        }
+
+        setSites(fetchedSites);
+
+        if (fetchedSites.length === 1) {
+          setSelectedSite(fetchedSites[0].id);
+        } else if (fetchedSites.length > 0 && userRole === 'site') {
+          setSelectedSite(fetchedSites[0].id);
+        }
+        
         setLoadingSites(false);
-      })
-      .catch(() => {
-        setError('Sites load error');
+      } catch (err) {
+        console.error(err);
+        setError('Data load error');
         setLoadingSites(false);
-      });
+      }
+    };
+
+    init();
   }, []);
 
   const loadPlan = () => {
@@ -1050,17 +1029,13 @@ export default function ProjectPlanPage() {
     // eslint-disable-next-line
   }, [selectedSite]);
 
+  // FULLKITTING - UPLOAD MODAL
   const openFullkitting = (row) => {
     const activity = row[headers[3]] || '';
     const subActivity = row[headers[4]] || '';
     const uid = row[headers[0]] || '';
 
-    setTaskDetails({
-      rowIndex: row._rowIndex,
-      uid,
-      activity,
-      subActivity,
-    });
+    setTaskDetails({ rowIndex: row._rowIndex, uid, activity, subActivity });
     setModalOpen(true);
     setLoadingKitting(true);
     setKittingItems([]);
@@ -1076,6 +1051,39 @@ export default function ProjectPlanPage() {
       .then((data) => {
         if (data.success) setKittingItems(data.items || []);
         else setModalError(data.message || 'Load failed');
+        setLoadingKitting(false);
+      })
+      .catch(() => {
+        setModalError('Server error');
+        setLoadingKitting(false);
+      });
+  };
+
+  // ✅ FULLKITTING - VIEW MODAL (For Senior Engineer/Admin)
+  const openViewKitting = (row) => {
+    const activity = row[headers[3]] || '';
+    const subActivity = row[headers[4]] || '';
+    const uid = row[headers[0]] || '';
+
+    setTaskDetails({ uid, activity, subActivity });
+    setViewKittingModal(true);
+    setLoadingKitting(true);
+    setViewKittingData([]);
+    setModalError('');
+
+    const url = `/api/project-plan?action=getKitting&siteId=${encodeURIComponent(
+      selectedSite
+    )}&activity=${encodeURIComponent(activity)}&subActivity=${encodeURIComponent(subActivity)}`;
+
+    fetch(url)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) {
+          const completedItems = (data.items || []).filter(item => item.status?.toLowerCase() === 'done');
+          setViewKittingData(completedItems);
+        } else {
+          setModalError(data.message || 'Load failed');
+        }
         setLoadingKitting(false);
       })
       .catch(() => {
@@ -1239,6 +1247,11 @@ export default function ProjectPlanPage() {
   };
 
   const selectedSiteName = sites.find((s) => s.id === selectedSite)?.name || '';
+  
+  // ROLE CHECKS
+  const userRole = currentUser?.type?.toLowerCase() || '';
+  const isSiteUser = userRole === 'site';
+  const isSeniorEngineer = userRole.includes('senior') || userRole.includes('sinior');
 
   return (
     <div className="w-full max-w-none">
@@ -1260,7 +1273,7 @@ export default function ProjectPlanPage() {
               className="input-field w-full"
               value={selectedSite}
               onChange={(e) => setSelectedSite(e.target.value)}
-              disabled={loadingSites}
+              disabled={loadingSites || (isSiteUser && sites.length === 1)}
             >
               <option value="">{loadingSites ? 'Loading sites...' : '-- Choose a site --'}</option>
               {sites.map((s) => (
@@ -1366,7 +1379,6 @@ export default function ProjectPlanPage() {
                   const isStarted = row._isStarted;
                   const isCompleted = row._isCompleted;
 
-                  // 🔥 Logical Step Flow Conditions
                   const canStart = isKitted && !isStarted; 
                   const canComplete = isStarted && !isCompleted; 
 
@@ -1387,39 +1399,78 @@ export default function ProjectPlanPage() {
                       <td className="px-3 sm:px-4 py-2 sm:py-2.5 text-center">
                         <div className="flex items-center justify-center gap-2 flex-wrap">
                           
-                          {/* 1. Fullkitting */}
+                          {/* 1. Fullkitting — SE ke liye disable */}
                           <button
-                            onClick={() => openFullkitting(row)}
-                            disabled={isKitted}
+                            onClick={() => {
+                              if (!isSeniorEngineer) openFullkitting(row);
+                            }}
+                            disabled={isKitted || isSeniorEngineer}
+                            title={isSeniorEngineer ? "Only Site User can upload fullkitting" : ""}
                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
-                              isKitted ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-600' : 'text-white hover:scale-105'
+                              isKitted || isSeniorEngineer
+                                ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-600'
+                                : 'text-white hover:scale-105'
                             }`}
-                            style={!isKitted ? { background: 'var(--primary)', boxShadow: '0 2px 6px rgba(15, 92, 86, 0.25)' } : {}}
+                            style={
+                              !(isKitted || isSeniorEngineer)
+                                ? { background: 'var(--primary)', boxShadow: '0 2px 6px rgba(15, 92, 86, 0.25)' }
+                                : {}
+                            }
                           >
                             {isKitted ? 'Fullkitted ✓' : 'Fullkitting'}
                           </button>
 
-                          {/* 2. Start */}
+                          {/* ✅ VIEW KITTING PHOTOS (Visible for everyone when kitted) */}
+                          {isKitted && (
+                            <button
+                              onClick={() => openViewKitting(row)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all bg-purple-100 text-purple-700 hover:bg-purple-200 hover:scale-105 shadow-sm"
+                            >
+                              👁 View Photos
+                            </button>
+                          )}
+
+                          {/* 2. Start — Site user ke liye hamesha DISABLE */}
                           <button
-                            onClick={() => openConfirmModal('start', row)}
-                            disabled={!canStart}
-                            title={!isKitted ? 'Pehle Fullkitting complete karein' : ''}
+                            onClick={() => {
+                              if (!isSiteUser) openConfirmModal('start', row);
+                            }}
+                            disabled={isSiteUser || !canStart}
+                            title={
+                              isSiteUser
+                                ? 'Site user Start nahi kar sakta'
+                                : !isKitted
+                                ? 'Pehle Fullkitting complete karein'
+                                : ''
+                            }
                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
-                              isStarted 
-                                ? 'opacity-50 cursor-not-allowed bg-blue-100 text-blue-800' 
-                                : !isKitted 
-                                  ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500' // Waiting for kitting
-                                  : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-md'
+                              isStarted
+                                ? 'opacity-50 cursor-not-allowed bg-blue-100 text-blue-800'
+                                : isSiteUser || !isKitted
+                                ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500'
+                                : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-md'
                             }`}
                           >
                             {isStarted ? 'Started ✓' : 'Start'}
                           </button>
 
-                          {/* 3. Edit (Always Enabled) */}
+                          {/* 3. Edit — Site user ke liye hamesha DISABLE */}
                           <button
-                            onClick={() => openEditModal(row)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all bg-amber-500 text-white hover:bg-amber-600 hover:scale-105"
-                            style={{ boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)' }}
+                            onClick={() => {
+                              if (!isSiteUser) openEditModal(row);
+                            }}
+                            disabled={isSiteUser}
+                            title={isSiteUser ? 'Site user Edit nahi kar sakta' : ''}
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
+                              isSiteUser
+                                ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-600'
+                                : 'bg-amber-500 text-white hover:bg-amber-600 hover:scale-105'
+                            }`}
+                            style={
+                              !isSiteUser
+                                ? { boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)' }
+                                : {}
+                            }
                           >
                             ✎ Edit
                           </button>
@@ -1428,13 +1479,19 @@ export default function ProjectPlanPage() {
                           <button
                             onClick={() => openConfirmModal('complete', row)}
                             disabled={!canComplete}
-                            title={isCompleted ? '' : !isStarted ? 'Pehle Task Start karein' : ''}
+                            title={
+                              isCompleted
+                                ? ''
+                                : !isStarted
+                                ? 'Pehle Task Start hona chahiye'
+                                : ''
+                            }
                             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
-                              isCompleted 
-                                ? 'opacity-50 cursor-not-allowed bg-green-100 text-green-800' 
-                                : !isStarted 
-                                  ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500' // Waiting for start
-                                  : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 shadow-md'
+                              isCompleted
+                                ? 'opacity-50 cursor-not-allowed bg-green-100 text-green-800'
+                                : !isStarted
+                                ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500'
+                                : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 shadow-md'
                             }`}
                           >
                             {isCompleted ? 'Completed ✓' : 'Completed'}
@@ -1450,7 +1507,173 @@ export default function ProjectPlanPage() {
         )}
       </div>
 
-      {/* CONFIRM MODAL (Start / Complete) */}
+      {/* VIEW KITTING MODAL (Read-Only) + Image Lightbox */}
+      {viewKittingModal && (
+        <div
+          className="fixed inset-0 z-[105] flex items-center justify-center p-2 sm:p-4"
+          style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+            style={{ background: 'var(--surface)' }}
+          >
+            <div
+              className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
+            >
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-600">
+                  View Uploaded Evidence — {taskDetails?.uid}
+                </p>
+                <h2 className="text-lg font-semibold truncate">
+                  {taskDetails?.activity}{' '}
+                  <span style={{ color: 'var(--text-muted)' }}>›</span>{' '}
+                  {taskDetails?.subActivity}
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setViewKittingModal(false);
+                  setLightboxImage(null);
+                }}
+                className="w-9 h-9 rounded-lg border flex items-center justify-center font-bold"
+                style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
+              {loadingKitting && (
+                <div className="py-12 text-center">
+                  <div
+                    className="inline-block w-8 h-8 rounded-full border-2 animate-spin"
+                    style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }}
+                  />
+                  <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>
+                    Loading evidence...
+                  </p>
+                </div>
+              )}
+
+              {!loadingKitting && viewKittingData.length === 0 && !modalError && (
+                <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  No uploaded evidence found for this task.
+                </div>
+              )}
+
+              {modalError && (
+                <div
+                  className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium"
+                  style={{
+                    background: 'var(--danger-soft)',
+                    color: 'var(--danger)',
+                    border: '1px solid #fecaca',
+                  }}
+                >
+                  {modalError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {viewKittingData.map((it, idx) => {
+                  const directImgUrl = formatDriveImageUrl(it.imageUrl);
+                  return (
+                    <div
+                      key={it.rowIndex}
+                      className="rounded-[12px] border p-4"
+                      style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
+                    >
+                      <p className="font-semibold text-sm mb-3">
+                        {idx + 1}. {it.checklist}
+                      </p>
+
+                      {it.imageUrl ? (
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxImage(directImgUrl)}
+                            className="block w-full overflow-hidden rounded-xl border bg-white text-left hover:opacity-95 transition-opacity"
+                            style={{ borderColor: 'var(--border-strong)' }}
+                          >
+                            <img
+                              src={directImgUrl}
+                              alt={`Evidence ${idx + 1}`}
+                              className="w-full h-auto max-h-60 object-contain bg-slate-50"
+                              loading="lazy"
+                              onError={(e) => {
+                                // Fallback if image fails to render inline
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextElementSibling.style.display = 'block';
+                              }}
+                            />
+                            <div className="hidden p-4 text-center text-sm text-gray-500">
+                              📷 Photo loaded via Google Drive. Click below to view.
+                            </div>
+
+                            <div className="px-3 py-2 text-xs font-semibold text-purple-700 bg-purple-50 border-t flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
+                              <span>🔍 Click to view full image</span>
+                              <span>Open Photo</span>
+                            </div>
+                          </button>
+
+                          {it.remarks ? (
+                            <p className="text-sm text-gray-700 mt-2">
+                              <span className="font-medium text-gray-500">Remarks:</span> {it.remarks}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">No Photo Available</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div
+              className="px-4 sm:px-6 py-3 border-t text-right"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            >
+              <button
+                onClick={() => {
+                  setViewKittingModal(false);
+                  setLightboxImage(null);
+                }}
+                className="text-sm font-semibold px-5 py-2 rounded-[10px] border bg-gray-50 text-gray-700 hover:bg-gray-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX — full image overlay */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.88)' }}
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white text-gray-800 font-bold text-lg shadow-lg flex items-center justify-center hover:bg-gray-200 transition-colors"
+            onClick={() => setLightboxImage(null)}
+          >
+            ✕
+          </button>
+          <img
+            src={lightboxImage}
+            alt="Full evidence"
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* CONFIRM MODAL */}
       {confirmModal.isOpen && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center p-4"
@@ -1479,7 +1702,6 @@ export default function ProjectPlanPage() {
               <b>{confirmModal.type === 'start' ? 'Start' : 'Completed'}</b> mark karna chahte hain?
             </p>
 
-            {/* Image Upload Field when Complete */}
             {confirmModal.type === 'complete' && (
               <div className="mb-6 text-left p-3 rounded-lg bg-slate-50 border border-slate-200">
                 <label className="label mb-2 block font-semibold text-sm">Upload Evidence Photo *</label>
@@ -1565,7 +1787,7 @@ export default function ProjectPlanPage() {
         </div>
       )}
 
-      {/* FULLKITTING MODAL */}
+      {/* FULLKITTING UPLOAD MODAL */}
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4" style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}>
           <div className="w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden" style={{ background: 'var(--surface)' }}>
