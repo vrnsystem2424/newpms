@@ -1,6 +1,20 @@
+
 // 'use client';
 
 // import { useEffect, useState } from 'react';
+
+// // Google Drive URL → Direct Image View URL Helper
+// function formatDriveImageUrl(url) {
+//   if (!url) return '';
+//   if (url.startsWith('data:image')) return url;
+
+//   // Extract file ID from various Google Drive URL formats
+//   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+//   if (match && match[1]) {
+//     return `https://lh3.googleusercontent.com/d/${match[1]}`;
+//   }
+//   return url;
+// }
 
 // // File → base64 helper
 // function fileToBase64(file) {
@@ -39,9 +53,10 @@
 //   const [submitting, setSubmitting] = useState(false);
 //   const [modalError, setModalError] = useState('');
 
-//   // ✅ View Kitting Modal State
+//   // ✅ View Kitting Modal & Lightbox State
 //   const [viewKittingModal, setViewKittingModal] = useState(false);
 //   const [viewKittingData, setViewKittingData] = useState([]);
+//   const [lightboxImage, setLightboxImage] = useState(null);
 
 //   const [confirmModal, setConfirmModal] = useState({
 //     isOpen: false,
@@ -192,7 +207,6 @@
 //       .then((r) => r.json())
 //       .then((data) => {
 //         if (data.success) {
-//           // Only show items that have been marked as 'Done'
 //           const completedItems = (data.items || []).filter(item => item.status?.toLowerCase() === 'done');
 //           setViewKittingData(completedItems);
 //         } else {
@@ -534,7 +548,7 @@
 //                             {isKitted ? 'Fullkitted ✓' : 'Fullkitting'}
 //                           </button>
 
-//                           {/* ✅ VIEW KITTING PHOTOS (Only visible if kitted) */}
+//                           {/* ✅ VIEW KITTING PHOTOS (Visible for everyone when kitted) */}
 //                           {isKitted && (
 //                             <button
 //                               onClick={() => openViewKitting(row)}
@@ -621,64 +635,169 @@
 //         )}
 //       </div>
 
-//       {/* VIEW KITTING MODAL (Read-Only) */}
+//       {/* VIEW KITTING MODAL (Read-Only) + Image Lightbox */}
 //       {viewKittingModal && (
-//         <div className="fixed inset-0 z-[105] flex items-center justify-center p-2 sm:p-4" style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}>
-//           <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden" style={{ background: 'var(--surface)' }}>
-//             <div className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
+//         <div
+//           className="fixed inset-0 z-[105] flex items-center justify-center p-2 sm:p-4"
+//           style={{ background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)' }}
+//         >
+//           <div
+//             className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+//             style={{ background: 'var(--surface)' }}
+//           >
+//             <div
+//               className="px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-3"
+//               style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
+//             >
 //               <div className="min-w-0">
-//                 <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-600">View Uploaded Evidence — {taskDetails?.uid}</p>
-//                 <h2 className="text-lg font-semibold truncate">{taskDetails?.activity} <span style={{ color: 'var(--text-muted)' }}>›</span> {taskDetails?.subActivity}</h2>
+//                 <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-600">
+//                   View Uploaded Evidence — {taskDetails?.uid}
+//                 </p>
+//                 <h2 className="text-lg font-semibold truncate">
+//                   {taskDetails?.activity}{' '}
+//                   <span style={{ color: 'var(--text-muted)' }}>›</span>{' '}
+//                   {taskDetails?.subActivity}
+//                 </h2>
 //               </div>
-//               <button onClick={() => setViewKittingModal(false)} className="w-9 h-9 rounded-lg border flex items-center justify-center font-bold" style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}>✕</button>
+//               <button
+//                 onClick={() => {
+//                   setViewKittingModal(false);
+//                   setLightboxImage(null);
+//                 }}
+//                 className="w-9 h-9 rounded-lg border flex items-center justify-center font-bold"
+//                 style={{ borderColor: 'var(--border-strong)', background: 'var(--surface)' }}
+//               >
+//                 ✕
+//               </button>
 //             </div>
-            
+
 //             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
 //               {loadingKitting && (
 //                 <div className="py-12 text-center">
-//                   <div className="inline-block w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
-//                   <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>Loading evidence...</p>
+//                   <div
+//                     className="inline-block w-8 h-8 rounded-full border-2 animate-spin"
+//                     style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }}
+//                   />
+//                   <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>
+//                     Loading evidence...
+//                   </p>
 //                 </div>
 //               )}
-              
+
 //               {!loadingKitting && viewKittingData.length === 0 && !modalError && (
-//                 <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No uploaded evidence found for this task.</div>
+//                 <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+//                   No uploaded evidence found for this task.
+//                 </div>
 //               )}
-              
+
 //               {modalError && (
-//                 <div className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid #fecaca' }}>{modalError}</div>
+//                 <div
+//                   className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium"
+//                   style={{
+//                     background: 'var(--danger-soft)',
+//                     color: 'var(--danger)',
+//                     border: '1px solid #fecaca',
+//                   }}
+//                 >
+//                   {modalError}
+//                 </div>
 //               )}
-              
+
 //               <div className="space-y-4">
-//                 {viewKittingData.map((it, idx) => (
-//                   <div key={it.rowIndex} className="rounded-[12px] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}>
-//                     <p className="font-semibold text-sm mb-3">{idx + 1}. {it.checklist}</p>
-//                     <div className="flex flex-wrap gap-4 items-center p-3 rounded-lg border bg-white" style={{ borderColor: 'var(--border-strong)' }}>
+//                 {viewKittingData.map((it, idx) => {
+//                   const directImgUrl = formatDriveImageUrl(it.imageUrl);
+//                   return (
+//                     <div
+//                       key={it.rowIndex}
+//                       className="rounded-[12px] border p-4"
+//                       style={{ borderColor: 'var(--border)', background: 'var(--bg-elevated)' }}
+//                     >
+//                       <p className="font-semibold text-sm mb-3">
+//                         {idx + 1}. {it.checklist}
+//                       </p>
+
 //                       {it.imageUrl ? (
-//                         <a href={it.imageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
-//                           <span className="text-lg">🖼️</span> View Uploaded Photo
-//                         </a>
+//                         <div className="space-y-2">
+//                           <button
+//                             type="button"
+//                             onClick={() => setLightboxImage(directImgUrl)}
+//                             className="block w-full overflow-hidden rounded-xl border bg-white text-left hover:opacity-95 transition-opacity"
+//                             style={{ borderColor: 'var(--border-strong)' }}
+//                           >
+//                             <img
+//                               src={directImgUrl}
+//                               alt={`Evidence ${idx + 1}`}
+//                               className="w-full h-auto max-h-60 object-contain bg-slate-50"
+//                               loading="lazy"
+//                               onError={(e) => {
+//                                 // Fallback if image fails to render inline
+//                                 e.currentTarget.style.display = 'none';
+//                                 e.currentTarget.nextElementSibling.style.display = 'block';
+//                               }}
+//                             />
+//                             <div className="hidden p-4 text-center text-sm text-gray-500">
+//                               📷 Photo loaded via Google Drive. Click below to view.
+//                             </div>
+
+//                             <div className="px-3 py-2 text-xs font-semibold text-purple-700 bg-purple-50 border-t flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
+//                               <span>🔍 Click to view full image</span>
+//                               <span>Open Photo</span>
+//                             </div>
+//                           </button>
+
+//                           {it.remarks ? (
+//                             <p className="text-sm text-gray-700 mt-2">
+//                               <span className="font-medium text-gray-500">Remarks:</span> {it.remarks}
+//                             </p>
+//                           ) : null}
+//                         </div>
 //                       ) : (
 //                         <span className="text-sm text-gray-400">No Photo Available</span>
 //                       )}
-                      
-//                       {it.remarks && (
-//                         <span className="text-sm text-gray-700 border-l pl-4 border-gray-300">
-//                           <span className="font-medium text-gray-500">Remarks:</span> {it.remarks}
-//                         </span>
-//                       )}
 //                     </div>
-//                   </div>
-//                 ))}
+//                   );
+//                 })}
 //               </div>
 //             </div>
-            
-//             <div className="px-4 sm:px-6 py-3 border-t text-right" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-//               <button onClick={() => setViewKittingModal(false)} className="text-sm font-semibold px-5 py-2 rounded-[10px] border bg-gray-50 text-gray-700 hover:bg-gray-100">
+
+//             <div
+//               className="px-4 sm:px-6 py-3 border-t text-right"
+//               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+//             >
+//               <button
+//                 onClick={() => {
+//                   setViewKittingModal(false);
+//                   setLightboxImage(null);
+//                 }}
+//                 className="text-sm font-semibold px-5 py-2 rounded-[10px] border bg-gray-50 text-gray-700 hover:bg-gray-100"
+//               >
 //                 Close
 //               </button>
 //             </div>
 //           </div>
+//         </div>
+//       )}
+
+//       {/* LIGHTBOX — full image overlay */}
+//       {lightboxImage && (
+//         <div
+//           className="fixed inset-0 z-[130] flex items-center justify-center p-4"
+//           style={{ background: 'rgba(0,0,0,0.88)' }}
+//           onClick={() => setLightboxImage(null)}
+//         >
+//           <button
+//             type="button"
+//             className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white text-gray-800 font-bold text-lg shadow-lg flex items-center justify-center hover:bg-gray-200 transition-colors"
+//             onClick={() => setLightboxImage(null)}
+//           >
+//             ✕
+//           </button>
+//           <img
+//             src={lightboxImage}
+//             alt="Full evidence"
+//             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+//             onClick={(e) => e.stopPropagation()}
+//           />
 //         </div>
 //       )}
 
@@ -871,14 +990,20 @@
 
 
 
+
+
+
 'use client';
 
+
 import { useEffect, useState } from 'react';
+
 
 // Google Drive URL → Direct Image View URL Helper
 function formatDriveImageUrl(url) {
   if (!url) return '';
   if (url.startsWith('data:image')) return url;
+
 
   // Extract file ID from various Google Drive URL formats
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
@@ -887,6 +1012,7 @@ function formatDriveImageUrl(url) {
   }
   return url;
 }
+
 
 // File → base64 helper
 function fileToBase64(file) {
@@ -905,6 +1031,7 @@ function fileToBase64(file) {
   });
 }
 
+
 export default function ProjectPlanPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [sites, setSites] = useState([]);
@@ -912,9 +1039,11 @@ export default function ProjectPlanPage() {
   const [headers, setHeaders] = useState([]);
   const [rows, setRows] = useState([]);
 
+
   const [loadingSites, setLoadingSites] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
+
 
   // Modals state
   const [modalOpen, setModalOpen] = useState(false);
@@ -925,10 +1054,12 @@ export default function ProjectPlanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
 
+
   // ✅ View Kitting Modal & Lightbox State
   const [viewKittingModal, setViewKittingModal] = useState(false);
   const [viewKittingData, setViewKittingData] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
+
 
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -937,6 +1068,7 @@ export default function ProjectPlanPage() {
   });
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [completeFile, setCompleteFile] = useState(null);
+
 
   const [editModal, setEditModal] = useState({
     isOpen: false,
@@ -948,6 +1080,7 @@ export default function ProjectPlanPage() {
     error: '',
   });
 
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -955,16 +1088,18 @@ export default function ProjectPlanPage() {
           fetch('/api/sites'),
           fetch('/api/auth/me')
         ]);
-        
         const dataSites = await resSites.json();
         const dataUser = await resUser.json();
+
 
         let fetchedSites = dataSites.success ? dataSites.sites : [];
         const u = dataUser.success ? dataUser.user : null;
         setCurrentUser(u);
 
+
         const userRole = u?.type?.toLowerCase()?.trim() || '';
         const userSite = u?.site?.toLowerCase()?.trim() || '';
+
 
         if (userRole === 'site' && userSite) {
           const matched = fetchedSites.filter((s) => {
@@ -973,19 +1108,21 @@ export default function ProjectPlanPage() {
             return sName === userSite || sId === userSite || sName.includes(userSite) || userSite.includes(sName);
           });
 
+
           if (matched.length > 0) {
             fetchedSites = matched;
           }
         }
 
+
         setSites(fetchedSites);
+
 
         if (fetchedSites.length === 1) {
           setSelectedSite(fetchedSites[0].id);
         } else if (fetchedSites.length > 0 && userRole === 'site') {
           setSelectedSite(fetchedSites[0].id);
         }
-        
         setLoadingSites(false);
       } catch (err) {
         console.error(err);
@@ -994,8 +1131,10 @@ export default function ProjectPlanPage() {
       }
     };
 
+
     init();
   }, []);
+
 
   const loadPlan = () => {
     if (!selectedSite) {
@@ -1024,16 +1163,19 @@ export default function ProjectPlanPage() {
       });
   };
 
+
   useEffect(() => {
     loadPlan();
     // eslint-disable-next-line
   }, [selectedSite]);
+
 
   // FULLKITTING - UPLOAD MODAL
   const openFullkitting = (row) => {
     const activity = row[headers[3]] || '';
     const subActivity = row[headers[4]] || '';
     const uid = row[headers[0]] || '';
+
 
     setTaskDetails({ rowIndex: row._rowIndex, uid, activity, subActivity });
     setModalOpen(true);
@@ -1042,9 +1184,11 @@ export default function ProjectPlanPage() {
     setFormState({});
     setModalError('');
 
+
     const url = `/api/project-plan?action=getKitting&siteId=${encodeURIComponent(
       selectedSite
     )}&activity=${encodeURIComponent(activity)}&subActivity=${encodeURIComponent(subActivity)}`;
+
 
     fetch(url)
       .then((r) => r.json())
@@ -1059,11 +1203,13 @@ export default function ProjectPlanPage() {
       });
   };
 
+
   // ✅ FULLKITTING - VIEW MODAL (For Senior Engineer/Admin)
   const openViewKitting = (row) => {
     const activity = row[headers[3]] || '';
     const subActivity = row[headers[4]] || '';
     const uid = row[headers[0]] || '';
+
 
     setTaskDetails({ uid, activity, subActivity });
     setViewKittingModal(true);
@@ -1071,9 +1217,11 @@ export default function ProjectPlanPage() {
     setViewKittingData([]);
     setModalError('');
 
+
     const url = `/api/project-plan?action=getKitting&siteId=${encodeURIComponent(
       selectedSite
     )}&activity=${encodeURIComponent(activity)}&subActivity=${encodeURIComponent(subActivity)}`;
+
 
     fetch(url)
       .then((r) => r.json())
@@ -1092,19 +1240,25 @@ export default function ProjectPlanPage() {
       });
   };
 
+
+  // ✅ UPDATED: Sirf 1 photo required hai, baaki sab optional
   const handleFullkittingSubmit = async () => {
     setModalError('');
-    const missing = kittingItems.find((it) => !formState[it.rowIndex]?.file);
-    if (missing) {
-      setModalError('Har checklist item ki photo upload karna zaruri hai');
+    
+    // Check if at least one item has a file uploaded
+    const hasAtLeastOneFile = kittingItems.some((it) => formState[it.rowIndex]?.file);
+    if (!hasAtLeastOneFile) {
+      setModalError('Kam se kam ek item ki photo upload karna zaruri hai');
       return;
     }
+
 
     setSubmitting(true);
     try {
       const payloadItems = await Promise.all(
         kittingItems.map(async (it) => {
-          const image = await fileToBase64(formState[it.rowIndex].file);
+          const fileObj = formState[it.rowIndex]?.file;
+          const image = fileObj ? await fileToBase64(fileObj) : null;
           return {
             rowIndex: it.rowIndex,
             remarks: formState[it.rowIndex]?.remarks || '',
@@ -1112,6 +1266,7 @@ export default function ProjectPlanPage() {
           };
         })
       );
+
 
       const res = await fetch('/api/project-plan', {
         method: 'POST',
@@ -1122,6 +1277,7 @@ export default function ProjectPlanPage() {
           items: payloadItems,
         }),
       });
+
 
       const data = await res.json();
       if (data.success) {
@@ -1137,13 +1293,16 @@ export default function ProjectPlanPage() {
     }
   };
 
+
   const openConfirmModal = (type, row) => {
     setCompleteFile(null);
     setConfirmModal({ isOpen: true, type, row });
   };
 
+
   const handleConfirmAction = async () => {
     if (!confirmModal.row || !confirmModal.type) return;
+
 
     let imagePayload = null;
     if (confirmModal.type === 'complete') {
@@ -1153,6 +1312,7 @@ export default function ProjectPlanPage() {
       }
       imagePayload = await fileToBase64(completeFile);
     }
+
 
     setActionSubmitting(true);
     try {
@@ -1166,6 +1326,7 @@ export default function ProjectPlanPage() {
           image: imagePayload,
         }),
       });
+
 
       const data = await res.json();
       if (data.success) {
@@ -1182,6 +1343,7 @@ export default function ProjectPlanPage() {
     }
   };
 
+
   const openEditModal = (row) => {
     setEditModal({
       isOpen: true,
@@ -1193,6 +1355,7 @@ export default function ProjectPlanPage() {
       error: '',
     });
   };
+
 
   const closeEditModal = () => {
     setEditModal({
@@ -1206,6 +1369,7 @@ export default function ProjectPlanPage() {
     });
   };
 
+
   const handleEditSubmit = async () => {
     if (!editModal.plannedStart || !editModal.plannedEnd) {
       setEditModal((s) => ({ ...s, error: 'Please select both dates' }));
@@ -1216,7 +1380,9 @@ export default function ProjectPlanPage() {
       return;
     }
 
+
     setEditModal((s) => ({ ...s, submitting: true, error: '' }));
+
 
     try {
       const res = await fetch('/api/project-plan', {
@@ -1234,6 +1400,7 @@ export default function ProjectPlanPage() {
         }),
       });
 
+
       const data = await res.json();
       if (data.success) {
         closeEditModal();
@@ -1246,12 +1413,13 @@ export default function ProjectPlanPage() {
     }
   };
 
+
   const selectedSiteName = sites.find((s) => s.id === selectedSite)?.name || '';
-  
   // ROLE CHECKS
   const userRole = currentUser?.type?.toLowerCase() || '';
   const isSiteUser = userRole === 'site';
   const isSeniorEngineer = userRole.includes('senior') || userRole.includes('sinior');
+
 
   return (
     <div className="w-full max-w-none">
@@ -1265,6 +1433,7 @@ export default function ProjectPlanPage() {
             Pending tasks as per precedence
           </p>
         </div>
+
 
         <div className="w-full lg:w-auto lg:min-w-[340px] lg:max-w-[400px] flex items-end gap-2">
           <div className="flex-1">
@@ -1281,6 +1450,7 @@ export default function ProjectPlanPage() {
               ))}
             </select>
           </div>
+
 
           {selectedSite && (
             <button
@@ -1306,11 +1476,13 @@ export default function ProjectPlanPage() {
         </div>
       </div>
 
+
       {error && (
         <div className="mb-4 rounded-[10px] px-4 py-3 text-sm font-medium" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid #fecaca' }}>
           {error}
         </div>
       )}
+
 
       {/* Table */}
       <div className="card w-full overflow-hidden">
@@ -1326,6 +1498,7 @@ export default function ProjectPlanPage() {
           </div>
         )}
 
+
         {!selectedSite && !loadingData && (
           <div className="p-8 sm:p-12 text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-4" style={{ background: 'var(--primary-soft)' }}>
@@ -1335,6 +1508,7 @@ export default function ProjectPlanPage() {
           </div>
         )}
 
+
         {loadingData && (
           <div className="p-8 sm:p-12 text-center">
             <div className="inline-block w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
@@ -1342,11 +1516,13 @@ export default function ProjectPlanPage() {
           </div>
         )}
 
+
         {selectedSite && !loadingData && rows.length === 0 && !error && (
           <div className="p-8 sm:p-12 text-center">
             <p className="font-medium">Koi pending task nahi hai</p>
           </div>
         )}
+
 
         {!loadingData && rows.length > 0 && (
           <div className="w-full overflow-x-auto">
@@ -1379,8 +1555,10 @@ export default function ProjectPlanPage() {
                   const isStarted = row._isStarted;
                   const isCompleted = row._isCompleted;
 
+
                   const canStart = isKitted && !isStarted; 
                   const canComplete = isStarted && !isCompleted; 
+
 
                   return (
                     <tr
@@ -1395,10 +1573,8 @@ export default function ProjectPlanPage() {
                           {row[h] ? row[h] : <span style={{ color: 'var(--text-soft)' }}>—</span>}
                         </td>
                       ))}
-                      
                       <td className="px-3 sm:px-4 py-2 sm:py-2.5 text-center">
                         <div className="flex items-center justify-center gap-2 flex-wrap">
-                          
                           {/* 1. Fullkitting — SE ke liye disable */}
                           <button
                             onClick={() => {
@@ -1420,6 +1596,7 @@ export default function ProjectPlanPage() {
                             {isKitted ? 'Fullkitted ✓' : 'Fullkitting'}
                           </button>
 
+
                           {/* ✅ VIEW KITTING PHOTOS (Visible for everyone when kitted) */}
                           {isKitted && (
                             <button
@@ -1429,6 +1606,7 @@ export default function ProjectPlanPage() {
                               👁 View Photos
                             </button>
                           )}
+
 
                           {/* 2. Start — Site user ke liye hamesha DISABLE */}
                           <button
@@ -1454,6 +1632,7 @@ export default function ProjectPlanPage() {
                             {isStarted ? 'Started ✓' : 'Start'}
                           </button>
 
+
                           {/* 3. Edit — Site user ke liye hamesha DISABLE */}
                           <button
                             onClick={() => {
@@ -1474,6 +1653,7 @@ export default function ProjectPlanPage() {
                           >
                             ✎ Edit
                           </button>
+
 
                           {/* 4. Completed */}
                           <button
@@ -1506,6 +1686,7 @@ export default function ProjectPlanPage() {
           </div>
         )}
       </div>
+
 
       {/* VIEW KITTING MODAL (Read-Only) + Image Lightbox */}
       {viewKittingModal && (
@@ -1543,6 +1724,7 @@ export default function ProjectPlanPage() {
               </button>
             </div>
 
+
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
               {loadingKitting && (
                 <div className="py-12 text-center">
@@ -1556,11 +1738,13 @@ export default function ProjectPlanPage() {
                 </div>
               )}
 
+
               {!loadingKitting && viewKittingData.length === 0 && !modalError && (
                 <div className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                   No uploaded evidence found for this task.
                 </div>
               )}
+
 
               {modalError && (
                 <div
@@ -1575,6 +1759,7 @@ export default function ProjectPlanPage() {
                 </div>
               )}
 
+
               <div className="space-y-4">
                 {viewKittingData.map((it, idx) => {
                   const directImgUrl = formatDriveImageUrl(it.imageUrl);
@@ -1587,6 +1772,7 @@ export default function ProjectPlanPage() {
                       <p className="font-semibold text-sm mb-3">
                         {idx + 1}. {it.checklist}
                       </p>
+
 
                       {it.imageUrl ? (
                         <div className="space-y-2">
@@ -1602,7 +1788,6 @@ export default function ProjectPlanPage() {
                               className="w-full h-auto max-h-60 object-contain bg-slate-50"
                               loading="lazy"
                               onError={(e) => {
-                                // Fallback if image fails to render inline
                                 e.currentTarget.style.display = 'none';
                                 e.currentTarget.nextElementSibling.style.display = 'block';
                               }}
@@ -1611,11 +1796,13 @@ export default function ProjectPlanPage() {
                               📷 Photo loaded via Google Drive. Click below to view.
                             </div>
 
+
                             <div className="px-3 py-2 text-xs font-semibold text-purple-700 bg-purple-50 border-t flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
                               <span>🔍 Click to view full image</span>
                               <span>Open Photo</span>
                             </div>
                           </button>
+
 
                           {it.remarks ? (
                             <p className="text-sm text-gray-700 mt-2">
@@ -1631,6 +1818,7 @@ export default function ProjectPlanPage() {
                 })}
               </div>
             </div>
+
 
             <div
               className="px-4 sm:px-6 py-3 border-t text-right"
@@ -1649,6 +1837,7 @@ export default function ProjectPlanPage() {
           </div>
         </div>
       )}
+
 
       {/* LIGHTBOX — full image overlay */}
       {lightboxImage && (
@@ -1673,6 +1862,7 @@ export default function ProjectPlanPage() {
         </div>
       )}
 
+
       {/* CONFIRM MODAL */}
       {confirmModal.isOpen && (
         <div
@@ -1693,14 +1883,17 @@ export default function ProjectPlanPage() {
               {confirmModal.type === 'start' ? '🚀' : '✓'}
             </div>
 
+
             <h3 className="text-lg font-bold mb-2">
               Confirm {confirmModal.type === 'start' ? 'Task Start' : 'Task Completion'}?
             </h3>
+
 
             <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
               Kya aap sure hain ki Task <b>{confirmModal.row?.[headers[0]] || ''}</b> ko{' '}
               <b>{confirmModal.type === 'start' ? 'Start' : 'Completed'}</b> mark karna chahte hain?
             </p>
+
 
             {confirmModal.type === 'complete' && (
               <div className="mb-6 text-left p-3 rounded-lg bg-slate-50 border border-slate-200">
@@ -1726,6 +1919,7 @@ export default function ProjectPlanPage() {
               </div>
             )}
 
+
             <div className="flex gap-3 justify-center mt-4">
               <button
                 type="button"
@@ -1736,6 +1930,7 @@ export default function ProjectPlanPage() {
               >
                 No, Cancel
               </button>
+
 
               <button
                 type="button"
@@ -1750,6 +1945,7 @@ export default function ProjectPlanPage() {
           </div>
         </div>
       )}
+
 
       {/* EDIT MODAL */}
       {editModal.isOpen && (
@@ -1786,6 +1982,7 @@ export default function ProjectPlanPage() {
           </div>
         </div>
       )}
+
 
       {/* FULLKITTING UPLOAD MODAL */}
       {modalOpen && (
@@ -1827,7 +2024,7 @@ export default function ProjectPlanPage() {
                         </div>
                       </div>
                       <div className="mb-3">
-                        <label className="label">Evidence Photo *</label>
+                        <label className="label">Evidence Photo (Optional)</label>
                         <input type="file" accept="image/*" className="hidden" id={`file-${it.rowIndex}`} onChange={(e) => setFormState((s) => ({ ...s, [it.rowIndex]: { ...(s[it.rowIndex] || {}), file: e.target.files?.[0] || null } }))} />
                         <label htmlFor={`file-${it.rowIndex}`} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-[10px] border-2 border-dashed cursor-pointer text-sm font-medium transition-colors" style={{ borderColor: state.file ? 'var(--primary)' : 'var(--border-strong)', color: state.file ? 'var(--primary)' : 'var(--text-muted)', background: state.file ? 'var(--primary-soft)' : 'var(--surface)' }}>
                           {state.file ? `✓ ${state.file.name}` : '📷 Click to upload photo'}
@@ -1844,7 +2041,7 @@ export default function ProjectPlanPage() {
             </div>
             {kittingItems.length > 0 && (
               <div className="px-4 sm:px-6 py-3 border-t flex items-center justify-between gap-3" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-                <p className="text-xs hidden sm:block" style={{ color: 'var(--text-muted)' }}>Sab items submit hone par Full Kitting Master me update ho jayegi</p>
+                <p className="text-xs hidden sm:block" style={{ color: 'var(--text-muted)' }}>Kam se kam 1 item ki photo upload karna zaroori hai</p>
                 <div className="flex gap-2 ml-auto">
                   <button onClick={() => setModalOpen(false)} disabled={submitting} className="text-sm font-semibold px-4 py-2 rounded-[10px] border" style={{ borderColor: 'var(--border-strong)', color: 'var(--text-muted)', background: 'var(--surface)' }}>Cancel</button>
                   <button onClick={handleFullkittingSubmit} disabled={submitting} className="btn-primary px-5 py-2">{submitting ? 'Uploading...' : 'Submit & Update'}</button>
