@@ -1,8 +1,5 @@
 
 
-
-
-
 // import { NextResponse } from 'next/server';
 // import { getSheetsClient } from '@/lib/googleSheets';
 // import { uploadImageToDrive } from '@/lib/googleDrive';
@@ -39,7 +36,7 @@
 
 //     const sheets = await getSheetsClient();
 
-//     // --- ACTION: getKitting → Full kitting Master se checklist items ---
+//     // --- ACTION: getKitting → Full kitting Master se checklist + Images ---
 //     if (action === 'getKitting') {
 //       const activity = (searchParams.get('activity') || '').trim();
 //       const subActivity = (searchParams.get('subActivity') || '').trim();
@@ -61,6 +58,11 @@
 //           checklist: (row[2] || '').trim(),
 //           verificationType: (row[3] || '').trim(),
 //           responsibleRole: (row[4] || '').trim(),
+//           // ✅ New fields fetched for viewing photos
+//           date: (row[5] || '').trim(),
+//           imageUrl: (row[6] || '').trim(),
+//           status: (row[7] || '').trim(),
+//           remarks: (row[8] || '').trim(),
 //         }))
 //         .filter(
 //           (it) =>
@@ -85,20 +87,17 @@
 
 //     const fullHeaders = allData[0];
     
-//     // 🔥 NEW: A se L (0 to 11) pick karna hai (K = Planned Start, L = Planned End)
+//     // Pick Headers
 //     const displayHeaders = fullHeaders.slice(0, 12);
-//     // 🔥 NEW: Column P (Index 15) pick karna hai (Resource Allocation)
 //     if (fullHeaders[15]) {
 //       displayHeaders.push(fullHeaders[15]); 
 //     }
 
-//     // Empty rows hatao (Valid rows)
 //     const validRows = allData
 //       .slice(1)
 //       .map((row, i) => ({ row, rowIndex: i + 2 }))
 //       .filter((r) => r.row[0] && r.row[0].trim() !== '');
 
-//     // Completion map (Column N = index 13)
 //     const completionStatus = {};
 //     validRows.forEach(({ row }) => {
 //       const uid = (row[0] || '').trim();
@@ -106,7 +105,6 @@
 //       completionStatus[uid] = colN !== '';
 //     });
 
-//     // Filter Logic
 //     const readyRows = validRows.filter(({ row }) => {
 //       const colK = (row[10] || '').trim(); // Column K
 //       const colN = (row[13] || '').trim(); // Column N
@@ -139,7 +137,6 @@
 //         _fullRow: row,
 //       };
       
-//       // Map exact headers to their values based on fullHeaders index
 //       displayHeaders.forEach((h) => {
 //         const hIdx = fullHeaders.indexOf(h);
 //         obj[h] = hIdx !== -1 ? (row[hIdx] || '') : '';
@@ -174,9 +171,7 @@
 //     const sheets = await getSheetsClient();
 //     const date = getFormattedDate();
 
-//     // ----------------------------------------------------
-//     // ACTION: START → Column M = Date, Column T = "Started"
-//     // ----------------------------------------------------
+//     // ACTION: START
 //     if (action === 'start') {
 //       await sheets.spreadsheets.values.batchUpdate({
 //         spreadsheetId: siteId,
@@ -191,13 +186,10 @@
 //       return NextResponse.json({ success: true, message: 'Task Started successfully', date });
 //     }
 
-//     // --------------------------------------------------------
-//     // ACTION: COMPLETE → Column N = Date, Column U = "Completed", Column Q = Image URL
-//     // --------------------------------------------------------
+//     // ACTION: COMPLETE
 //     if (action === 'complete') {
 //       let imageUrl = '';
       
-//       // Upload image to Drive if provided
 //       if (image && image.base64) {
 //         imageUrl = await uploadImageToDrive({
 //           base64: image.base64,
@@ -211,7 +203,6 @@
 //         { range: `Project Plan!U${projectPlanRowIndex}`, values: [['Completed']] },
 //       ];
 
-//       // 🔥 Save Image URL to Column Q
 //       if (imageUrl) {
 //         updates.push({ range: `Project Plan!Q${projectPlanRowIndex}`, values: [[imageUrl]] });
 //       }
@@ -226,9 +217,7 @@
 //       return NextResponse.json({ success: true, message: 'Task Completed successfully', date, imageUrl });
 //     }
 
-//     // ==========================================================================
-//     // ACTION: EDIT → Update K & L in Project Plan + Append to Exception Change Log
-//     // ==========================================================================
+//     // ACTION: EDIT
 //     if (action === 'edit') {
 //       if (!editData || !editData.plannedStart || !editData.plannedEnd) {
 //         return NextResponse.json({ success: false, message: 'Planned dates are required' }, { status: 400 });
@@ -274,9 +263,7 @@
 //       return NextResponse.json({ success: true, message: 'Exception logged & plan updated' });
 //     }
 
-//     // ----------------------------------------------------
-//     // DEFAULT ACTION: FULLKITTING (Images upload + updates)
-//     // ----------------------------------------------------
+//     // ACTION: FULLKITTING
 //     if (!Array.isArray(items) || items.length === 0) {
 //       return NextResponse.json({ success: false, message: 'No items provided for kitting' }, { status: 400 });
 //     }
@@ -323,10 +310,15 @@
 
 
 
+
+
 import { NextResponse } from 'next/server';
 import { getSheetsClient } from '@/lib/googleSheets';
 import { uploadImageToDrive } from '@/lib/googleDrive';
 import { getAuthUser } from '@/lib/auth';
+
+const KITTING_SHEET = "'Full kitting Master'";
+const PLAN_SHEET = "'Project Plan'";
 
 // Date format: DD/MM/YYYY
 function getFormattedDate() {
@@ -341,6 +333,17 @@ function formatInputDate(str) {
   if (parts.length !== 3) return str;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
+
+// API jo range wapas deta hai (e.g. "'Full kitting Master'!A1:I200") usse
+// pehli row ka number nikalo — taaki values[0] kis sheet row ka hai, pakka pata ho.
+function getStartRow(a1Range) {
+  const m = String(a1Range || '').match(/![A-Z]+(\d+)/i);
+  return m ? parseInt(m[1], 10) : 1;
+}
+
+const norm = (v) => String(v || '').trim().toLowerCase();
+const kittingKey = (activity, subActivity, checklist) =>
+  `${norm(activity)}|${norm(subActivity)}|${norm(checklist)}`;
 
 export async function GET(req) {
   try {
@@ -366,22 +369,23 @@ export async function GET(req) {
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: siteId,
-        range: 'Full kitting Master!A1:I',
+        range: `${KITTING_SHEET}!A1:I`,
       });
 
       const allData = response.data.values || [];
       if (allData.length < 2) return NextResponse.json({ success: true, items: [] });
 
+      const startRow = getStartRow(response.data.range);
+
       const items = allData
         .slice(1)
         .map((row, i) => ({
-          rowIndex: i + 2,
+          rowIndex: startRow + i + 1, // header ke baad wali asli sheet row
           activity: (row[0] || '').trim(),
           subActivity: (row[1] || '').trim(),
           checklist: (row[2] || '').trim(),
           verificationType: (row[3] || '').trim(),
           responsibleRole: (row[4] || '').trim(),
-          // ✅ New fields fetched for viewing photos
           date: (row[5] || '').trim(),
           imageUrl: (row[6] || '').trim(),
           status: (row[7] || '').trim(),
@@ -389,8 +393,8 @@ export async function GET(req) {
         }))
         .filter(
           (it) =>
-            it.activity.toLowerCase() === activity.toLowerCase() &&
-            it.subActivity.toLowerCase() === subActivity.toLowerCase() &&
+            norm(it.activity) === norm(activity) &&
+            norm(it.subActivity) === norm(subActivity) &&
             it.checklist
         );
 
@@ -400,7 +404,7 @@ export async function GET(req) {
     // --- DEFAULT: Project Plan table (A-Z data read) ---
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: siteId,
-      range: 'Project Plan!A1:Z',
+      range: `${PLAN_SHEET}!A1:Z`,
     });
 
     const allData = response.data.values || [];
@@ -408,17 +412,18 @@ export async function GET(req) {
       return NextResponse.json({ success: true, headers: [], rows: [] });
     }
 
+    const planStartRow = getStartRow(response.data.range);
     const fullHeaders = allData[0];
-    
+
     // Pick Headers
     const displayHeaders = fullHeaders.slice(0, 12);
     if (fullHeaders[15]) {
-      displayHeaders.push(fullHeaders[15]); 
+      displayHeaders.push(fullHeaders[15]);
     }
 
     const validRows = allData
       .slice(1)
-      .map((row, i) => ({ row, rowIndex: i + 2 }))
+      .map((row, i) => ({ row, rowIndex: planStartRow + i + 1 }))
       .filter((r) => r.row[0] && r.row[0].trim() !== '');
 
     const completionStatus = {};
@@ -459,7 +464,7 @@ export async function GET(req) {
         _completedDate: row[13] || '',
         _fullRow: row,
       };
-      
+
       displayHeaders.forEach((h) => {
         const hIdx = fullHeaders.indexOf(h);
         obj[h] = hIdx !== -1 ? (row[hIdx] || '') : '';
@@ -485,7 +490,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { siteId, projectPlanRowIndex, action, items, editData, image } = body;
+    const { siteId, projectPlanRowIndex, action, items, editData, image, activity, subActivity } = body;
 
     if (!siteId || !projectPlanRowIndex) {
       return NextResponse.json({ success: false, message: 'Invalid payload' }, { status: 400 });
@@ -501,8 +506,8 @@ export async function POST(req) {
         requestBody: {
           valueInputOption: 'USER_ENTERED',
           data: [
-            { range: `Project Plan!M${projectPlanRowIndex}`, values: [[date]] },
-            { range: `Project Plan!T${projectPlanRowIndex}`, values: [['Started']] },
+            { range: `${PLAN_SHEET}!M${projectPlanRowIndex}`, values: [[date]] },
+            { range: `${PLAN_SHEET}!T${projectPlanRowIndex}`, values: [['Started']] },
           ],
         },
       });
@@ -512,7 +517,7 @@ export async function POST(req) {
     // ACTION: COMPLETE
     if (action === 'complete') {
       let imageUrl = '';
-      
+
       if (image && image.base64) {
         imageUrl = await uploadImageToDrive({
           base64: image.base64,
@@ -522,12 +527,12 @@ export async function POST(req) {
       }
 
       const updates = [
-        { range: `Project Plan!N${projectPlanRowIndex}`, values: [[date]] },
-        { range: `Project Plan!U${projectPlanRowIndex}`, values: [['Completed']] },
+        { range: `${PLAN_SHEET}!N${projectPlanRowIndex}`, values: [[date]] },
+        { range: `${PLAN_SHEET}!U${projectPlanRowIndex}`, values: [['Completed']] },
       ];
 
       if (imageUrl) {
-        updates.push({ range: `Project Plan!Q${projectPlanRowIndex}`, values: [[imageUrl]] });
+        updates.push({ range: `${PLAN_SHEET}!Q${projectPlanRowIndex}`, values: [[imageUrl]] });
       }
 
       await sheets.spreadsheets.values.batchUpdate({
@@ -548,7 +553,7 @@ export async function POST(req) {
 
       const rowResponse = await sheets.spreadsheets.values.get({
         spreadsheetId: siteId,
-        range: `Project Plan!A${projectPlanRowIndex}:J${projectPlanRowIndex}`,
+        range: `${PLAN_SHEET}!A${projectPlanRowIndex}:J${projectPlanRowIndex}`,
       });
 
       const rowData = (rowResponse.data.values && rowResponse.data.values[0]) || [];
@@ -566,7 +571,7 @@ export async function POST(req) {
 
       await sheets.spreadsheets.values.append({
         spreadsheetId: siteId,
-        range: 'Exception Change Log!A:M',
+        range: "'Exception Change Log'!A:M",
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [logRow] },
@@ -577,8 +582,8 @@ export async function POST(req) {
         requestBody: {
           valueInputOption: 'USER_ENTERED',
           data: [
-            { range: `Project Plan!K${projectPlanRowIndex}`, values: [[plannedStart]] },
-            { range: `Project Plan!L${projectPlanRowIndex}`, values: [[plannedEnd]] },
+            { range: `${PLAN_SHEET}!K${projectPlanRowIndex}`, values: [[plannedStart]] },
+            { range: `${PLAN_SHEET}!L${projectPlanRowIndex}`, values: [[plannedEnd]] },
           ],
         },
       });
@@ -591,29 +596,59 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: 'No items provided for kitting' }, { status: 400 });
     }
 
+    if (!items.some((it) => it.image?.base64)) {
+      return NextResponse.json({ success: false, message: 'Kam se kam ek photo upload karna zaruri hai' }, { status: 400 });
+    }
+
+    // ✅ Row number client par bharosa karke nahi — sheet dobara padh kar
+    // Activity + Sub Activity + Checklist match karke asli row nikalo.
+    const kitRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: siteId,
+      range: `${KITTING_SHEET}!A1:C`,
+    });
+    const kitData = kitRes.data.values || [];
+    const kitStartRow = getStartRow(kitRes.data.range);
+
+    const rowsByKey = {}; // key → [rowNumbers] (duplicate checklist bhi handle)
+    kitData.forEach((row, i) => {
+      if (i === 0) return; // header
+      const key = kittingKey(row[0], row[1], row[2]);
+      (rowsByKey[key] = rowsByKey[key] || []).push(kitStartRow + i);
+    });
+
+    const resolveRow = (it) => {
+      if (activity && it.checklist) {
+        const list = rowsByKey[kittingKey(activity, subActivity, it.checklist)];
+        if (list && list.length) return list.shift();
+      }
+      return Number(it.rowIndex); // fallback
+    };
+
     const uploaded = await Promise.all(
       items.map(async (it) => {
-        if (!it.image?.base64) {
-          throw new Error(`Photo missing for checklist row ${it.rowIndex}`);
-        }
+        const sheetRow = resolveRow(it);
+        if (!it.image?.base64) return { ...it, sheetRow, url: '' };
         const url = await uploadImageToDrive({
           base64: it.image.base64,
           mimeType: it.image.mimeType || 'image/jpeg',
           name: it.image.name || `evidence_${Date.now()}.jpg`,
         });
-        return { ...it, url };
+        return { ...it, sheetRow, url };
       })
     );
 
+    // F = Date, G = Photo URL, H = Status, I = Remarks
     const data = uploaded.map((it) => ({
-      range: `Full kitting Master!F${it.rowIndex}:I${it.rowIndex}`,
+      range: `${KITTING_SHEET}!F${it.sheetRow}:I${it.sheetRow}`,
       values: [[date, it.url, 'Done', it.remarks || '']],
     }));
 
     data.push({
-      range: `Project Plan!O${projectPlanRowIndex}`,
+      range: `${PLAN_SHEET}!O${projectPlanRowIndex}`,
       values: [['Done']],
     });
+
+    console.log('Fullkitting rows:', uploaded.map((it) => ({ checklist: it.checklist, sent: it.rowIndex, written: it.sheetRow })));
 
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: siteId,
